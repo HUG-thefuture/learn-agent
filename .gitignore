@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 运行期产物（任务输出不入库，可随时重新生成）
+data/outputs/
+webapp/serve.log
+*.log
+
+# 模型与大文件
+models/
+*.gguf
+*.safetensors
+
+# 训练证据（保留）：data/knowledge/index.json、data/datasets/*.jsonl、data/train_report.json
+# IDE
+.idea/
+.vscode/

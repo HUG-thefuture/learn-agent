@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>learn-agent 编程学习助手</title>
+<style>
+  :root { --bg:#0f1420; --panel:#1a2233; --line:#2a3450; --fg:#e8edf7; --dim:#93a0bd; --acc:#5b9dff; --ok:#3ecf8e; --bad:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font-family:"Microsoft YaHei",system-ui,sans-serif; }
+  header { padding:14px 22px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:14px; }
+  header h1 { font-size:18px; margin:0; }
+  header .meta { color:var(--dim); font-size:12px; }
+  nav { display:flex; gap:4px; padding:10px 22px 0; }
+  nav button { background:none; border:1px solid transparent; border-bottom:none; color:var(--dim); padding:8px 16px; cursor:pointer; font-size:14px; border-radius:8px 8px 0 0; }
+  nav button.active { color:var(--fg); border-color:var(--line); background:var(--panel); }
+  main { padding:18px 22px; max-width:980px; margin:0 auto; }
+  .panel { display:none; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; min-height:420px; }
+  .panel.active { display:block; }
+  .row { display:flex; gap:8px; margin:8px 0; }
+  input, select, textarea { background:#0d1220; border:1px solid var(--line); color:var(--fg); border-radius:8px; padding:9px 12px; font-size:14px; flex:1; }
+  button.go { background:var(--acc); border:none; color:#fff; padding:9px 18px; border-radius:8px; cursor:pointer; }
+  button.go:disabled { opacity:.5; }
+  #chatlog { height:340px; overflow-y:auto; border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; background:#0d1220; }
+  .me { color:var(--acc); margin:6px 0 2px; font-weight:bold; }
+  .bot { white-space:pre-wrap; margin:2px 0 14px; line-height:1.6; }
+  .job { border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:10px 0; }
+  .job .st-running { color:#f7c948; } .job .st-done { color:var(--ok); }
+  pre.result { background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:10px; white-space:pre-wrap; font-size:13px; max-height:320px; overflow:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td,th { border-bottom:1px solid var(--line); padding:7px 8px; text-align:left; }
+  .pill { display:inline-block; background:#0d1220; border:1px solid var(--line); border-radius:20px; padding:2px 10px; margin:2px; font-size:12px; color:var(--dim); cursor:pointer; }
+  .stat { color:var(--dim); font-size:13px; margin:6px 0; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>learn-agent</h1>
+  <span class="meta" id="status">加载中…</span>
+</header>
+<nav>
+  <button data-p="chat" class="active">对话</button>
+  <button data-p="wf">任务工作流</button>
+  <button data-p="learn">语言学习</button>
+  <button data-p="lc">力扣刷题</button>
+  <button data-p="kb">知识库</button>
+</nav>
+<main>
+  <!-- 对话 -->
+  <section id="p-chat" class="panel active">
+    <div id="chatlog"></div>
+    <div class="row">
+      <select id="chat-model" style="max-width:220px"></select>
+      <input id="chat-in" placeholder="问我编程问题…（Enter 发送）">
+      <button class="go" onclick="sendChat()">发送</button>
+    </div>
+  </section>
+
+  <!-- 任务工作流 -->
+  <section id="p-wf" class="panel">
+    <p class="stat">工作流：思考 → 计划 → 审查 →（不过回思考）→ 开发 → 代码审查 → 测试（含内存泄漏检测）→ 完成，最多 3 轮。</p>
+    <div class="row">
+      <input id="task-desc" placeholder="描述开发任务，例：用Python实现一个带LRU淘汰的缓存类并附测试">
+      <button class="go" onclick="runTask()">运行</button>
+    </div>
+    <div id="task-jobs"></div>
+  </section>
+
+  <!-- 学习 -->
+  <section id="p-learn" class="panel">
+    <p class="stat">学习 = 生成教程 + 自动沉淀知识库（学习即训练）。</p>
+    <div class="row">
+      <select id="learn-lang" style="max-width:160px"></select>
+      <input id="learn-topic" placeholder="主题，例：装饰器 / Promise / Stream">
+      <button class="go" onclick="runLearn()">学习</button>
+    </div>
+    <div id="learn-jobs"></div>
+  </section>
+
+  <!-- 力扣 -->
+  <section id="p-lc" class="panel">
+    <p class="stat">解题走完整工作流，并用内置测试 + 内存泄漏检测判题。</p>
+    <div id="lc-list"></div>
+    <div id="lc-jobs"></div>
+  </section>
+
+  <!-- 知识库 -->
+  <section id="p-kb" class="panel">
+    <div class="row">
+      <input id="kb-q" placeholder="检索已学知识…（如：装饰器 / LRU / with 语句）">
+      <button class="go" onclick="kbSearch()">检索</button>
+    </div>
+    <div id="kb-out"></div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+// Tab 切换
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); $('#p-' + b.dataset.p).classList.add('active');
+});
+
+async function init() {
+  const st = await (await fetch('/api/status')).json();
+  const train = st.train_report || {};
+  $('#status').textContent =
+    `Ollama: ${st.ollama.join(', ') || '离线'} | 知识库 ${st.kb_docs} 篇` +
+    (train.knowledge ? ` | 命中率 ${(train.knowledge.knowledge_train.hit_rate*100).toFixed(0)}%` : '') +
+    (st.external_enabled ? ' | 外部增强: 开' : ' | 外部增强: 未配置Key');
+  const sel = $('#chat-model');
+  (st.ollama.includes('learn-agent') ? ['learn-agent', ...st.ollama.filter(m => m !== 'learn-agent')] : st.ollama)
+    .forEach(m => sel.add(new Option(m, m)));
+  const ls = $('#learn-lang');
+  Object.keys(st.curriculum).forEach(k => ls.add(new Option(k, k)));
+  const probs = await (await fetch('/api/problems')).json();
+  $('#lc-list').innerHTML = '<table><tr><th>slug</th><th>题目</th><th>难度</th><th></th></tr>' +
+    probs.map(p => `<tr><td>${p.slug}</td><td>${p.title}</td><td>${p.difficulty}</td>
+      <td><button class="go" onclick="solve('${p.slug}')">解题</button></td></tr>`).join('') + '</table>';
+  refreshJobs();
+}
+
+function renderJob(j) {
+  const st = j.status === 'done' ? '<span class="st-done">完成</span>' : '<span class="st-running">运行中…</span>';
+  let body = '';
+  if (j.status === 'done') {
+    const r = j.result || {};
+    let line = (r.summary || JSON.stringify(r)).slice(0, 1500);
+    if (r.local_tests) {
+      const t = r.local_tests;
+      line += `\n内置测试: <span class="${t.passed ? 'ok' : 'bad'}">${t.passed ? '全部通过' : '存在失败'}</span>`;
+      if (t.leak && t.leak.detail) line += `\n内存: ${t.leak.detail}`;
+    }
+    body = `<pre class="result">${esc(line)}</pre>`;
+  }
+  return `<div class="job"><b>[${esc(j.kind)}]</b> ${esc(j.desc)} @${esc(j.started)} — ${st}${body}</div>`;
+}
+
+async function refreshJobs() {
+  const jobs = await (await fetch('/api/jobs')).json();
+  const box = id => $(id);
+  const mk = f => jobs.filter(f).map(renderJob).join('') || '<p class="stat">暂无任务</p>';
+  box('#task-jobs').innerHTML = mk(j => j.kind === 'task');
+  box('#lc-jobs').innerHTML = mk(j => j.kind === 'solve');
+  box('#learn-jobs').innerHTML = mk(j => j.kind === 'learn');
+  const busy = jobs.some(j => j.status === 'running');
+  if (busy) setTimeout(refreshJobs, 3000);
+}
+
+async function runTask() {
+  const d = $('#task-desc').value.trim(); if (!d) return;
+  await fetch('/api/task', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({desc: d})});
+  $('#task-desc').value = ''; refreshJobs();
+}
+async function runLearn() {
+  const lang = $('#learn-lang').value, topic = $('#learn-topic').value.trim(); if (!topic) return;
+  await fetch('/api/learn', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lang, topic})});
+  $('#learn-topic').value = ''; refreshJobs();
+}
+async function solve(slug) {
+  await fetch('/api/solve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({slug})});
+  refreshJobs();
+}
+
+async function sendChat() {
+  const inp = $('#chat-in'), msg = inp.value.trim(); if (!msg) return;
+  inp.value = '';
+  $('#chatlog').insertAdjacentHTML('beforeend', `<div class="me">你</div><div class="bot">${esc(msg)}</div><div class="me">助手</div><div class="bot" id="tmp">思考中…</div>`);
+  $('#chatlog').scrollTop = $('#chatlog').scrollHeight;
+  try {
+    const r = await (await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: msg, model: $('#chat-model').value})})).json();
+    $('#tmp')?.replaceWith(Object.assign(document.createElement('div'), {className: 'bot', textContent: r.reply || r.error}));
+  } catch (e) { $('#tmp').textContent = '请求失败: ' + e; }
+  $('#chatlog').scrollTop = $('#chatlog').scrollHeight;
+}
+$('#chat-in').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat(); });
+
+async function kbSearch() {
+  const q = $('#kb-q').value.trim(); if (!q) return;
+  const hits = await (await fetch('/api/kb?q=' + encodeURIComponent(q))).json();
+  $('#kb-out').innerHTML = hits.length ? hits.map(h =>
+    `<div class="job"><b>${esc(h.title)}</b> <span class="stat">[${h.lang}] score=${h.score} src=${esc(h.source)}</span><br>${esc(h.excerpt)}…</div>`
+  ).join('') : '<p class="stat">没有命中，先去"语言学习"里学一点东西吧</p>';
+}
+
+init();
+</script>
+</body>
+</html>

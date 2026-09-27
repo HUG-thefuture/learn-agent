@@ -1,0 +1,9 @@
+{
+  "knowledge_train": {
+    "docs": 46,
+    "vocab": 3199,
+    "distilled_docs": 40,
+    "hit_rate": 1.0,
+    "index": "D:\\learn-agent\\data\\knowledge\\index.json"
+  }
+}
