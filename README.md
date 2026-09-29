@@ -33,6 +33,8 @@ D:\learn-agent\
 │   ├── finetune_lora.py    # 可选：QLoRA 真微调（需另装 torch/peft，见文件头注释）
 │   └── run_training.py     # 一键训练
 ├── webapp/                 # Web 控制台（Flask + 原生前端）
+├── gui/app.py              # 桌面图形应用（Tkinter 深色主题，五页签）
+├── learn-agent-gui.bat     # 桌面应用双击启动器
 ├── tests/test_all.py       # 单元测试 + 集成测试
 └── data/                   # knowledge(索引) datasets(蒸馏语料) outputs(任务产物)
 ```
@@ -41,6 +43,9 @@ D:\learn-agent\
 
 ```bash
 cd D:\learn-agent
+:: 桌面图形应用（推荐，双击 learn-agent-gui.bat 亦可）
+python main.py gui
+
 :: 训练（蒸馏数据 -> 知识库 -> 生成本地定制模型 learn-agent）
 python main.py train --topics 5
 
@@ -82,6 +87,15 @@ external_model:
 ```
 
 启用后：① 复杂审查与蒸馏自动走外部强模型；② 工作流连续失败 2 次自动升级到外部模型再审。
+
+## 图形界面（两种）
+
+| 入口 | 说明 |
+|---|---|
+| `python main.py gui`（或双击 `learn-agent-gui.bat`） | **桌面应用**（Tkinter，零额外依赖）：对话（流式输出）/ 语言学习 / 力扣刷题（选题解题+判题）/ 开发任务（实时工作流日志）/ 训练（含报告展示） |
+| `python main.py serve` → http://127.0.0.1:7860 | **浏览器控制台**（Flask）：同样的五大功能 |
+
+两者均后台线程执行耗时操作，界面不卡顿；桌面版流式对话逐字显示。
 
 ## 工作流说明
 

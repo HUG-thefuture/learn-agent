@@ -33,7 +33,8 @@ class Workflow:
     """一次任务的完整 PDCA 循环。kind: general|leetcode|learning"""
 
     def __init__(self, task: str, kind: str = "general", task_id: str = None,
-                 workspace: Path = None, context: str = "", quiet: bool = False):
+                 workspace: Path = None, context: str = "", quiet: bool = False,
+                 log_fn=None):
         self.task = task
         self.kind = kind
         self.task_id = task_id or time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:6]
@@ -41,6 +42,7 @@ class Workflow:
         self.workspace.mkdir(parents=True, exist_ok=True)
         self.context = context        # 外部注入上下文（题面/课程/知识库摘要等）
         self.quiet = quiet
+        self.log_fn = log_fn          # 外部日志钩子（GUI 实时显示用）
         self.r = router()
         self.max_rounds = cfg()["escalation"]["max_loop_rounds"]
         self.escalate_after = cfg()["escalation"]["escalate_after_failures"]
@@ -53,7 +55,10 @@ class Workflow:
         line = f"[{time.strftime('%H:%M:%S')}] {msg}"
         self.log_lines.append(line)
         if not self.quiet:
-            print(line, flush=True)
+            if self.log_fn:
+                self.log_fn(line)
+            else:
+                print(line, flush=True)
 
     def _save(self, name: str, content: str):
         p = self.workspace / name

@@ -196,8 +196,8 @@ def check_solution(p, code: str) -> dict:
             "leak": leak}
 
 
-def solve(slug: str) -> dict:
-    """完整解题：走思考->计划->审查->实现->测试循环。"""
+def solve(slug: str, log_fn=None) -> dict:
+    """完整解题：走思考->计划->审查->实现->测试循环。log_fn 用于 GUI 实时日志。"""
     p = get_problem(slug)
     tests_desc = "\n".join(f"- 输入 {a} -> 期望 {e}" for a, e in p["tests"])
     context = f"""【力扣题目】{p['title']}（{p['difficulty']}）
@@ -207,7 +207,8 @@ def solve(slug: str) -> dict:
 【内置测试用例（必须全部通过）】
 {tests_desc}
 【输出要求】只输出一个文件 solution.py，包含签名所指的函数/类，底部附简单自测。"""
-    wf = Workflow(f"实现力扣题目 {p['title']} 并通过全部测试", kind="leetcode", context=context)
+    wf = Workflow(f"实现力扣题目 {p['title']} 并通过全部测试", kind="leetcode",
+                  context=context, log_fn=log_fn)
     res = wf.run()
     # 用题库真实测试再验一次
     code_file = wf.workspace / "code" / "solution.py"

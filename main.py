@@ -155,6 +155,11 @@ def cmd_serve(_args):
     app.run(host="127.0.0.1", port=7860, debug=False)
 
 
+def cmd_gui(_args):
+    from gui.app import main as gui_main
+    gui_main()
+
+
 def main():
     ensure_dirs()
     ap = argparse.ArgumentParser(prog="learn-agent",
@@ -181,6 +186,7 @@ def main():
     p.add_argument("--topics", type=int, default=6, help="每种语言蒸馏的主题数上限")
     p.set_defaults(fn=cmd_train)
     sub.add_parser("serve").set_defaults(fn=cmd_serve)
+    sub.add_parser("gui").set_defaults(fn=cmd_gui)
     args = ap.parse_args()
     args.fn(args)
 
