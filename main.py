@@ -179,6 +179,33 @@ def cmd_train(args):
                      ensure_ascii=False, indent=2))
 
 
+def cmd_db(args):
+    from core.db import db
+    d = db()
+    if args.schema:
+        for t in d.schema(args.schema):
+            cols = ", ".join(f"{n} {ty}" + ("*" if k else "") for n, ty, k in t["columns"])
+            print(f"■ {t['table']}\n   {cols}")
+        return
+    if not args.sql:
+        st = d.ping()
+        print("服务:", st)
+        if st.get("ok"):
+            print("数据库:", ", ".join(d.databases()))
+        return
+    r = d.query(args.sql, args.database)
+    if not r.get("ok"):
+        print("❌", r.get("error"))
+        return
+    if r.get("rows"):
+        print(" | ".join(r["columns"]))
+        for row in r["rows"]:
+            print(" | ".join(str(v) for v in row))
+        print(f"({r['shown']}/{r.get('total', '?')} 行)", r.get("note", ""))
+    else:
+        print(f"✅ 受影响 {r.get('affected')} 行")
+
+
 def cmd_serve(_args):
     from webapp.app import app
     print("Web 控制台: http://127.0.0.1:7860")
@@ -223,6 +250,11 @@ def main():
     p.add_argument("--no-external", action="store_true")
     p.add_argument("--topics", type=int, default=6, help="每种语言蒸馏的主题数上限")
     p.set_defaults(fn=cmd_train)
+    p = sub.add_parser("db")
+    p.add_argument("sql", nargs="?", help="SQL 语句；留空查看连接与数据库列表")
+    p.add_argument("--database", default=None)
+    p.add_argument("--schema", default=None, help="查看某库表结构")
+    p.set_defaults(fn=cmd_db)
     sub.add_parser("serve").set_defaults(fn=cmd_serve)
     sub.add_parser("gui").set_defaults(fn=cmd_gui)
     args = ap.parse_args()

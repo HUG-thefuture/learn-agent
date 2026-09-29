@@ -104,6 +104,7 @@ class App:
         self._tab_learn(nb)
         self._tab_leetcode(nb)
         self._tab_task(nb)
+        self._tab_db(nb)
         self._tab_train(nb)
         self.status = ttk.Label(self.root, text="初始化…", style="Dim.TLabel")
         self.status.pack(fill="x", padx=12, pady=6)
@@ -492,7 +493,105 @@ class App:
 
         threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
 
-    # ---------- 页签5：训练 ----------
+    # ---------- 页签5：数据库 ----------
+    def _tab_db(self, nb):
+        f = ttk.Frame(nb)
+        nb.add(f, text=" 数据库 ")
+        row = ttk.Frame(f)
+        row.pack(fill="x", padx=10, pady=(10, 4))
+        ttk.Label(row, text="连接：").pack(side="left")
+        self.db_status = ttk.Label(row, text="未检测", style="Dim.TLabel")
+        self.db_status.pack(side="left")
+        ttk.Label(row, text="数据库").pack(side="left", padx=(16, 4))
+        self.db_name = ttk.Combobox(row, width=18, state="readonly")
+        self.db_name.pack(side="left")
+        ttk.Button(row, text="刷新", command=self._db_refresh).pack(side="left", padx=4)
+        ttk.Label(f, text="SQL 控制台（Ctrl+Enter 执行；本地 MySQL/MariaDB，凭据见 config.yaml）",
+                  style="Dim.TLabel").pack(anchor="w", padx=12)
+        self.db_sql = tk.Text(f, bg="#0d1220", fg=C_FG, insertbackground=C_FG,
+                              relief="flat", height=6, wrap="none",
+                              highlightthickness=1, highlightbackground=C_LINE,
+                              font=FONT_MONO)
+        self.db_sql.pack(fill="x", padx=10, pady=4)
+        self.db_sql.insert("1.0", "SELECT VERSION();")
+        self.db_sql.bind("<Control-Return>", lambda e: self._db_run())
+        btns = ttk.Frame(f)
+        btns.pack(fill="x", padx=10)
+        self.btn_db = ttk.Button(btns, text="执行 (Ctrl+Enter)", style="Acc.TButton",
+                                 command=self._db_run)
+        self.btn_db.pack(side="left")
+        ttk.Label(f, text="提示：让 AI 帮你写 SQL 可以去「对话」页签，它可通过 mysql_query 工具直接操作本库。",
+                  style="Dim.TLabel").pack(side="left", padx=10)
+        cols_frame = ttk.Frame(f)
+        cols_frame.pack(fill="both", expand=True, padx=10, pady=6)
+        self.db_tree = ttk.Treeview(cols_frame, show="headings")
+        ys = ttk.Scrollbar(cols_frame, orient="vertical", command=self.db_tree.yview)
+        self.db_tree.configure(yscrollcommand=ys.set)
+        self.db_tree.pack(side="left", fill="both", expand=True)
+        ys.pack(side="right", fill="y")
+        self.db_out = make_text(f)
+        self.db_out.pack(fill="x", padx=10, pady=(0, 10), ipady=4)
+        self._db_refresh()
+
+    def _db_refresh(self):
+        def work():
+            from core.db import db
+            d = db()
+            st = d.ping()
+            names = d.databases() if st.get("ok") else []
+            return {"st": st, "names": names}
+
+        def done(res):
+            st, names = res["st"], res["names"]
+            if st.get("ok"):
+                self.db_status.config(text=f"✅ {st['server']} ({st['version']})", style="Dim.TLabel")
+                self.db_name["values"] = names
+                if names:
+                    self.db_name.current(0)
+            else:
+                self.db_status.config(text=f"❌ {st.get('error', '不可用')}", style="Dim.TLabel")
+
+        threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    def _db_run(self):
+        sql = self.db_sql.get("1.0", "end").strip()
+        if not sql or "db" in self.busy:
+            return
+        self.busy.add("db")
+        self.btn_db.state(["disabled"])
+        database = self.db_name.get() or None
+
+        def work():
+            from core.db import db
+            return db().query(sql, database)
+
+        def done(r):
+            t = self.db_tree
+            t.delete(*t.get_children())
+            t["columns"] = []
+            if not r.get("ok"):
+                self.db_out.delete("1.0", "end")
+                self.db_out.insert("end", "❌ " + r.get("error", ""), "bad")
+            elif r.get("rows"):
+                cols = r["columns"]
+                t["columns"] = cols
+                for c in cols:
+                    t.heading(c, text=c)
+                    t.column(c, width=140, anchor="w")
+                for row in r["rows"]:
+                    t.insert("", "end", values=[str(v) for v in row])
+                self.db_out.delete("1.0", "end")
+                self.db_out.insert("end", f"✅ {r['shown']}/{r.get('total', '?')} 行 "
+                                          f"{r.get('note', '')}", "ok")
+            else:
+                self.db_out.delete("1.0", "end")
+                self.db_out.insert("end", f"✅ 执行成功，受影响 {r.get('affected')} 行", "ok")
+            self.busy.discard("db")
+            self.btn_db.state(["!disabled"])
+
+        threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    # ---------- 页签6：训练 ----------
     def _tab_train(self, nb):
         f = ttk.Frame(nb)
         nb.add(f, text=" 训练 ")

@@ -130,6 +130,33 @@ class TestSeeds(unittest.TestCase):
             self.assertIn("id", d); self.assertIn("title", d); self.assertIn("text", d)
 
 
+class TestDB(unittest.TestCase):
+    def setUp(self):
+        from core.db import DBTool
+        self.d = DBTool()
+        st = self.d.ping()
+        if not st.get("ok"):
+            self.skipTest(f"MySQL 不可用: {st.get('error')}")
+
+    def test_databases(self):
+        dbs = self.d.databases()
+        self.assertIn("mysql", dbs)
+
+    def test_query_select(self):
+        r = self.d.query("SELECT 1 AS a, 'b' AS b")
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["rows"], [[1, "b"]])
+
+    def test_query_forbidden(self):
+        r = self.d.query("DROP DATABASE mysql")
+        self.assertFalse(r["ok"])
+
+    def test_query_bad_sql(self):
+        r = self.d.query("SELECT * FROM no_such_table_xyz")
+        self.assertFalse(r["ok"])
+        self.assertIn("error", r)
+
+
 class TestWorkflow(unittest.TestCase):
     def test_review_lang_filter(self):
         """非代码文件不应做语言级静态检查（曾误报 html/css 语法错误）。"""

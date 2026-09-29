@@ -35,6 +35,14 @@ TOOLS = [
         "name": "list_problems", "description": "列出内置力扣题库",
         "parameters": {"type": "object", "properties": {
             "difficulty": {"type": "string", "enum": ["简单", "中等", "困难"]}}}}},
+    {"type": "function", "function": {
+        "name": "mysql_query", "description": "在本地 MySQL/MariaDB 上执行一条 SQL（SELECT/SHOW 返回数据，DML 返回受影响行数；禁止 DROP DATABASE）",
+        "parameters": {"type": "object", "properties": {
+            "sql": {"type": "string"}, "database": {"type": "string"}}, "required": ["sql"]}}},
+    {"type": "function", "function": {
+        "name": "mysql_schema", "description": "查看本地 MySQL 某数据库中所有表及其字段",
+        "parameters": {"type": "object", "properties": {
+            "database": {"type": "string"}}, "required": ["database"]}}},
 ]
 
 
@@ -51,6 +59,12 @@ def dispatch_tool(name: str, **kw):
     if name == "list_problems":
         return [{"slug": p["slug"], "title": p["title"], "difficulty": p["difficulty"]}
                 for p in __import__("modules.leetcode", fromlist=["PROBLEMS"]).PROBLEMS]
+    if name == "mysql_query":
+        from core.db import db
+        return db().query(kw.get("sql", ""), kw.get("database"))
+    if name == "mysql_schema":
+        from core.db import db
+        return db().schema(kw["database"])
     return {"error": f"未知工具 {name}"}
 
 

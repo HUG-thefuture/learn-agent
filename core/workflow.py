@@ -162,9 +162,19 @@ class Workflow:
 {json.dumps(plan, ensure_ascii=False, indent=2)}
 
 审查维度：目标覆盖度、步骤完整性、文件职责合理性、测试是否覆盖边界条件、
-风险是否遗漏、是否存在会导致逻辑错误的隐患。输出 JSON：
+风险是否遗漏、是否存在会导致逻辑错误的隐患。
+
+严重度裁定标准（必须遵守）：
+- high 仅限：方案无法实现目标、步骤缺失导致无法运行、明显逻辑错误、资源泄漏设计、安全漏洞
+- medium：可能影响质量的疏漏（如边界条件未覆盖）
+- low：改进建议、"未提及/未说明/可以更好"类的完善性意见
+- 禁止提出超出项目规模的企业级要求（如：演示项目不要求连接池/分布式/高可用）
+- 不要纠结文档表述完整性，关注方案本身能否正确运行
+
+输出 JSON：
 {{"pass": true/false, "issues": [{{"severity": "high|medium|low", "desc": "问题描述", "fix": "修改建议"}}]}}
-severity=high 的问题将导致计划打回重做。只输出 JSON。"""
+severity=high 的问题将导致计划打回重做；pass 的判定标准是"按此计划能开发出正确运行的程序"。
+只输出 JSON。"""
         verdict, err = self._llm_json(prompt, "review_plan", think=False)
         if err:
             return {"pass": False, "issues": [{"severity": "high", "desc": "评审调用失败: " + err}]}
@@ -177,6 +187,11 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
 
     def develop(self, plan, round_no: int) -> dict:
         """按计划生成代码文件。返回 {filename: code}"""
+        prev_digest = ""
+        if getattr(self, "last_files", None) and round_no > 1:
+            prev_digest = "\n# 上一轮代码（应在其基础上修复问题，不要从零重写）\n" + \
+                "\n\n".join(f"### {n}\n```python\n{c[:2500]}\n```"
+                            for n, c in list(self.last_files.items())[:4])
         prompt = f"""按计划编写完整可运行的代码。
 
 # 任务
@@ -184,6 +199,7 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
 
 # 计划
 {json.dumps(plan, ensure_ascii=False, indent=2)}
+{prev_digest}
 
 硬性要求：
 1. 每个文件输出完整代码（可运行，不含占位符省略）
@@ -197,6 +213,7 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
         if err:
             raise LLMError("开发阶段失败: " + err)
         files = data.get("files", {})
+        self.last_files = files
         code_dir = self.workspace / "code"
         code_dir.mkdir(exist_ok=True)
         for name, code in files.items():
@@ -208,12 +225,14 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
     def review_code(self, files: dict, plan, round_no: int):
         """静态检查 + LLM 代码评审。"""
         issues = []
+        advisory = ("addEventListener 未配对",)  # "可能泄漏"类启发式降为 medium，避免阻塞收敛
         for name, code in files.items():
             lang = review_lang(name)
             if not lang:
                 continue  # html/css/md 等非代码文件不做语言级语法检查
             for i in codecheck.full_check(code, lang):
-                issues.append({"severity": "high", "desc": f"[静态检查:{name}] {i}", "fix": "按提示修复"})
+                sev = "medium" if any(m in i for m in advisory) else "high"
+                issues.append({"severity": sev, "desc": f"[静态检查:{name}] {i}", "fix": "按提示修复"})
         code_digest = "\n\n".join(f"### {n}\n```python\n{c[:3000]}\n```" for n, c in files.items())
         prompt = f"""请审查以下代码（对照计划）。重点：逻辑正确性、边界条件、
 资源泄漏(文件/线程/连接)、异常处理、算法复杂度、安全问题。
@@ -229,12 +248,28 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
 
 已知静态检查结果：{json.dumps(issues, ensure_ascii=False) if issues else '无'}
 
+严重度裁定标准（必须遵守）：
+- high 仅限：语法错误、逻辑错误、资源泄漏、安全漏洞、无法通过计划中的测试
+- medium：边界条件缺失、错误处理不足
+- low：风格与改进建议
+- html/css/md 是静态资源文件，不是 Python，不要按代码语法审查它们
+- 不要重复罗列"已知静态检查结果"中已有的问题
+- 拿不准的问题一律降为 medium/low，宁可放行待测试环节验证
+
 输出 JSON：{{"pass": true/false, "issues": [{{"severity": "high|medium|low", "desc": "...", "fix": "..."}}]}}
-pass=false 或存在 high 问题将打回重做。只输出 JSON。"""
+pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请 pass=true（交给测试环节验证）。只输出 JSON。"""
         verdict, err = self._llm_json(prompt, "review_code", think=False)
         if err:
             verdict = {"pass": False, "issues": [{"severity": "medium", "desc": "LLM评审失败(以静态检查为准): " + err}]}
-        all_issues = issues + verdict.get("issues", [])
+        # 去重：LLM 评审不应重复罗列静态检查已报告的问题
+        static_texts = [i["desc"] for i in issues]
+        llm_issues = []
+        for i in verdict.get("issues", []):
+            desc = str(i.get("desc", ""))
+            if any(s[6:] in desc or desc[:40] in s for s in static_texts if len(s) > 6):
+                continue
+            llm_issues.append(i)
+        all_issues = issues + llm_issues
         n_high = sum(1 for i in all_issues if i.get("severity") == "high")
         passed = verdict.get("pass") is True and n_high == 0 and not issues
         if issues:

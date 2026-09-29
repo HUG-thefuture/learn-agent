@@ -89,6 +89,17 @@ CSS: 选择器(类./id#/后代空格); 盒子模型 content+padding+border+margi
 变量 --c: value + var(--c); 交互 transition/transform/hover。
 调试: F12 元素面板看盒子与样式; Console 看报错。
 """},
+    {"id": "seed:py:mysql", "title": "Python 连接 MySQL(MariaDB) 速查", "lang": "python",
+     "tags": ["database", "cheatsheet"], "source": "seed", "text": """
+pip install pymysql（纯 Python 驱动，兼容 MySQL/MariaDB）。
+连接: conn = pymysql.connect(host='127.0.0.1', port=3306, user='root',
+     password='...', database='db', charset='utf8mb4', connect_timeout=5)
+查询: with conn.cursor() as cur: cur.execute("SELECT ..."); rows = cur.fetchall()
+写入: cur.execute("INSERT ...", params); conn.commit()（务必提交）
+务必参数化查询防注入: cur.execute("SELECT * FROM t WHERE id=%s", (uid,))，不要 f-string 拼接。
+用 try/finally 或上下文管理确保 conn.close()；查字段: cur.description。
+本机学习助手可用 `python main.py db "SELECT ..."` 或 GUI 数据库页签直接操作。
+"""},
     {"id": "seed:web:fullstack", "title": "前后端开发要点", "lang": "general",
      "tags": ["fullstack"], "source": "seed", "text": """
 后端: RESTful 设计(GET查/POST增/PUT改/DELETE删); 参数校验; 统一错误处理; CORS 配置;

@@ -12,7 +12,9 @@
   Go 短链接服务、SQL 电商库表与报表、HTML/CSS 响应式个人主页
 - **刷算法**：内置 12 道力扣经典题（带可运行测试），解题走完整质量工作流并自动判题、查内存泄漏
 - **做开发**：FastAPI / Flask / Express + 前端脚手架一键生成，生成即体检
-- **函数调用**：LLM function-calling 工具循环（联网搜索 / 运行代码 / 检索知识库 / 代码体检）
+- **函数调用**：LLM function-calling 工具循环（联网搜索 / 运行代码 / 检索知识库 / 代码体检 / **MySQL 数据库操作**）
+- **本地数据库**：直连本机 MySQL/MariaDB（凭据在 `config.yaml` 的 `database` 段），CLI `db` 命令、GUI 数据库页签、
+  AI 工具 `mysql_query`/`mysql_schema` 三种方式操作真实库
 - **质量工作流**：`思考 → 计划 → 审查 →（不过→回思考）→ 开发 → 代码审查 → 测试 →（不过→回思考）→ 完成`，最多 3 轮循环；连续失败自动升级模型（外部 API 或深度模型+思考模式）
 - **训练体系**：数据蒸馏 → 知识库 TF-IDF 训练（带命中率指标）→ 定制本地模型 `learn-agent`（`ollama create`）→ 可选真·LoRA 微调脚本（RTX 4070 可跑）
 
@@ -84,6 +86,12 @@ python main.py dev my-app --stack fastapi
 
 :: function-calling 工具循环
 python main.py tools "搜一下 FastAPI 最新版本特性并总结"
+
+:: 本地数据库（MySQL/MariaDB，凭据见 config.yaml）
+python main.py db                          # 查看连接与数据库列表
+python main.py db "SELECT VERSION()"       # 执行 SQL
+python main.py db --schema xzs             # 查看某库表结构
+:: 也可在 GUI「数据库」页签使用 SQL 控制台，或在对话中让 AI 通过 mysql_query 工具操作
 
 :: Web 控制台
 python main.py serve        # http://127.0.0.1:7860
