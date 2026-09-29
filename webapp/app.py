@@ -13,7 +13,7 @@ from flask import Flask, jsonify, render_template, request
 from core.config import cfg, data_dir
 from core.knowledge import kb
 from core.workflow import Workflow
-from modules.learning import LearningModule, CURRICULUM
+from modules.learning import LearningModule, CURRICULUM, _flatten
 from modules.leetcode import list_problems
 
 app = Flask(__name__)
@@ -39,7 +39,10 @@ def _spawn(kind, desc, **kw):
                 res = solve(desc)
             elif kind == "learn":
                 res = {"ok": True, "summary": LearningModule().learn(
-                    kw["lang"], kw["topic"])}
+                    kw.get("lang"), kw.get("topic") or None)}
+            elif kind == "capstone":
+                from modules.learning import LearningModule
+                res = LearningModule().capstone(kw["lang"])
             else:
                 res = {"ok": False, "summary": "未知任务类型"}
         except Exception as e:
@@ -72,9 +75,18 @@ def status():
         except Exception:
             pass
     return jsonify(ollama=models, kb_docs=len(kb().docs),
-                   curriculum={k: len(v["topics"]) for k, v in CURRICULUM.items()},
+                   curriculum={k: len(_flatten(v)) for k, v in CURRICULUM.items()},
                    train_report=train_report,
                    external_enabled=bool(cfg()["external_model"].get("enabled")))
+
+
+@app.get("/api/path")
+def api_path():
+    lang = request.args.get("lang", "python")
+    try:
+        return jsonify(path=LearningModule().path(lang))
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
 
 
 @app.post("/api/chat")
@@ -120,10 +132,12 @@ def api_solve():
 def api_learn():
     body = request.get_json(force=True)
     lang, topic = body.get("lang"), (body.get("topic") or "").strip()
-    if lang not in CURRICULUM or not topic:
-        return jsonify(error="lang/topic 无效"), 400
-    return jsonify(job=_spawn("learn", f"学习 {lang}:{topic}",
-                              lang=lang, topic=topic))
+    if lang not in CURRICULUM:
+        return jsonify(error="lang 无效"), 400
+    kind = "capstone" if body.get("capstone") else "learn"
+    label = f"进阶实战 {lang}" if body.get("capstone") else \
+        (f"学习 {lang}:{topic}" if topic else f"引导学习 {lang}(下一课)")
+    return jsonify(job=_spawn(kind, label, lang=lang, topic=topic))
 
 
 @app.get("/api/job/<job_id>")

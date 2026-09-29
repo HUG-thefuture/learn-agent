@@ -22,12 +22,15 @@ DISTILL_SYSTEM = (
 
 
 def _topics(lang: str, limit: int):
-    c = CURRICULUM[lang]
-    return c["topics"][:limit]
+    """按阶段顺序展平大纲，取前 limit 个主题。"""
+    from modules.learning import _flatten
+    return _flatten(CURRICULUM[lang])[:limit]
 
 
 def gen_topic_pairs(lang: str, topic: str, r) -> list:
-    prompt = f"""为「{CURRICULUM[lang]['name']} - {topic}」生成 2 条教学数据对。每条：
+    from modules.learning import _stage_of
+    stage = _stage_of(CURRICULUM[lang], topic)
+    prompt = f"""为「{CURRICULUM[lang]['name']}（{stage}）- {topic}」生成 2 条教学数据对。每条：
 instruction: 学习者关于该主题的一个典型问题
 output: 准确解答（含可运行代码示例与关键注意点，200~400字）
 

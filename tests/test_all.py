@@ -130,6 +130,53 @@ class TestSeeds(unittest.TestCase):
             self.assertIn("id", d); self.assertIn("title", d); self.assertIn("text", d)
 
 
+class TestWorkflow(unittest.TestCase):
+    def test_review_lang_filter(self):
+        """非代码文件不应做语言级静态检查（曾误报 html/css 语法错误）。"""
+        from core.workflow import review_lang
+        self.assertEqual(review_lang("main.py"), "python")
+        self.assertEqual(review_lang("app.js"), "javascript")
+        self.assertIsNone(review_lang("templates/index.html"))
+        self.assertIsNone(review_lang("static/style.css"))
+        self.assertIsNone(review_lang("README.md"))
+
+
+class TestLearningV2(unittest.TestCase):
+    def test_curriculum_integrity(self):
+        from modules.learning import CURRICULUM, _flatten, _stage_of
+        self.assertGreaterEqual(len(CURRICULUM), 7, "至少7门语言")
+        for lang, c in CURRICULUM.items():
+            self.assertIn("name", c); self.assertIn("runner", c); self.assertIn("goal", c)
+            stages = c["stages"]
+            self.assertTrue(any(s.startswith("L0") for s in stages), f"{lang} 缺少零基础阶段")
+            self.assertIn("capstone", c)
+            topics = _flatten(c)
+            self.assertGreaterEqual(len(topics), 20, f"{lang} 主题过少")
+            self.assertEqual(len(topics), len(set(topics)), f"{lang} 主题重复")
+            for t in topics:
+                self.assertTrue(_stage_of(c, t), f"{lang} 主题 {t} 无所属阶段")
+
+    def test_progress_and_next_topic(self):
+        import tempfile
+        from modules.learning import LearningModule
+        lm = LearningModule()
+        with tempfile.TemporaryDirectory() as d:
+            lm._progress_path = lambda: Path(d) / "progress.json"
+            first = lm.next_topic("python")
+            self.assertEqual(first, lm.flat_topics("python")[0])
+            lm._mark_learned("python", first)
+            second = lm.next_topic("python")
+            self.assertNotEqual(first, second)
+            p = lm.path("python")
+            self.assertIn("✓", p) and self.assertIn("总进度", p)
+            self.assertIn(second, p)
+
+    def test_distill_flatten(self):
+        from modules.learning import CURRICULUM, _flatten
+        from training.distill import _topics
+        self.assertTrue(set(_topics("python", 100)).issubset(set(_flatten(CURRICULUM["python"]))))
+
+
 @unittest.skipUnless(ollama_up(), "Ollama 未运行，跳过集成测试")
 class IntegrationLLM(unittest.TestCase):
     def test_router_ask(self):

@@ -203,19 +203,28 @@ class App:
         row = ttk.Frame(f)
         row.pack(fill="x", padx=10, pady=(10, 4))
         ttk.Label(row, text="语言").pack(side="left")
-        self.learn_lang = ttk.Combobox(row, values=["python", "javascript", "java"],
+        from modules.learning import CURRICULUM
+        self.learn_lang = ttk.Combobox(row, values=list(CURRICULUM),
                                        width=12, state="readonly")
         self.learn_lang.current(0)
         self.learn_lang.pack(side="left", padx=4)
         ttk.Label(row, text="主题").pack(side="left", padx=(10, 0))
-        self.learn_topic = ttk.Entry(row, width=28)
+        self.learn_topic = ttk.Entry(row, width=24)
         self.learn_topic.pack(side="left", padx=4, ipady=4)
-        self.btn_learn = ttk.Button(row, text="学习此主题", style="Acc.TButton",
-                                    command=self._learn_run)
-        self.btn_learn.pack(side="left", padx=6)
-        self.btn_quiz = ttk.Button(row, text="出题测验", command=self._quiz_run)
-        self.btn_quiz.pack(side="left")
-        ttk.Label(f, text="学习会生成完整教程并自动沉淀知识库（学习即训练）；测验生成题目+答案+解析。",
+        self.btn_path = ttk.Button(row, text="学习路径", command=self._show_path)
+        self.btn_path.pack(side="left", padx=(10, 0))
+        self.btn_start = ttk.Button(row, text="下一课", style="Acc.TButton",
+                                    command=self._learn_next)
+        self.btn_start.pack(side="left", padx=4)
+        self.btn_learn = ttk.Button(row, text="学指定主题", command=self._learn_run)
+        self.btn_learn.pack(side="left", padx=4)
+        self.btn_quiz = ttk.Button(row, text="测验", command=self._quiz_run)
+        self.btn_quiz.pack(side="left", padx=4)
+        self.btn_cap = ttk.Button(row, text="进阶实战", style="Acc.TButton",
+                                  command=self._capstone_run)
+        self.btn_cap.pack(side="left", padx=4)
+        ttk.Label(f, text="L0零基础→L6算法 分阶段路径；「下一课」从0开始自动推进；"
+                          "学习自动沉淀知识库；「进阶实战」用已学知识自主完成前后端/算法项目（走完整工作流）。",
                   style="Dim.TLabel").pack(anchor="w", padx=12)
         self.learn_out = make_text(f)
         self.learn_out.pack(fill="both", expand=True, padx=10, pady=6)
@@ -227,13 +236,67 @@ class App:
         self.kb_q.bind("<Return>", lambda e: self._kb_search())
         ttk.Button(kbrow, text="检索", command=self._kb_search).pack(side="left")
 
+    def _show_path(self):
+        lang = self.learn_lang.get()
+        from modules.learning import LearningModule
+        self.learn_out.delete("1.0", "end")
+        self.learn_out.insert("end", LearningModule().path(lang), "bot")
+
+    def _learn_next(self):
+        if "learn" in self.busy:
+            return
+        self.busy.add("learn")
+        self._set_learn_buttons("disabled")
+        lang = self.learn_lang.get()
+        self.learn_out.delete("1.0", "end")
+        self.learn_out.insert("end", f"正在进入 {lang} 下一课（自动选择未学的第一课）…\n", "sys")
+
+        def work():
+            from modules.learning import LearningModule
+            return LearningModule().learn(lang, None)
+
+        def done(res):
+            self.learn_out.delete("1.0", "end")
+            self.learn_out.insert("end", str(res), "bot")
+            self._learn_ready()
+
+        threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    def _capstone_run(self):
+        if "learn" in self.busy:
+            return
+        self.busy.add("learn")
+        self._set_learn_buttons("disabled")
+        lang = self.learn_lang.get()
+        self.learn_out.delete("1.0", "end")
+        self.learn_out.insert("end", f"进阶实战启动：Agent 将用已学知识自主完成 {lang} 项目（见实时日志）…\n", "sys")
+
+        def work():
+            from modules.learning import LearningModule
+            return LearningModule().capstone(lang,
+                                             log_fn=lambda m: self.q.put(("log_learn", m)))
+
+        def done(res):
+            t = self.learn_out
+            t.insert("end", "\n==== 实战结果 ====\n", "head")
+            t.insert("end", (res.get("summary") if isinstance(res, dict) else str(res)) + "\n",
+                     "ok" if isinstance(res, dict) and res.get("ok") else "bad")
+            if isinstance(res, dict) and res.get("workspace"):
+                t.insert("end", f"项目目录: {res['workspace']}\n", "sys")
+            self._learn_ready()
+
+        threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    def _set_learn_buttons(self, state):
+        for b in (self.btn_learn, self.btn_quiz, self.btn_start, self.btn_cap, self.btn_path):
+            b.state([state])
+
     def _learn_run(self):
         topic = self.learn_topic.get().strip()
         if not topic or "learn" in self.busy:
             return
         self.busy.add("learn")
-        self.btn_learn.state(["disabled"])
-        self.btn_quiz.state(["disabled"])
+        self._set_learn_buttons("disabled")
         lang = self.learn_lang.get()
         self.learn_out.delete("1.0", "end")
         self.learn_out.insert("end", f"正在学习 {lang} · {topic}（生成教程中，约1~2分钟）…\n", "sys")
@@ -244,7 +307,7 @@ class App:
 
         def done(res):
             self.learn_out.delete("1.0", "end")
-            self.learn_out.insert("end", res, "bot")
+            self.learn_out.insert("end", str(res), "bot")
             self._learn_ready()
             self._load_models_async()
 
@@ -255,8 +318,7 @@ class App:
         if not topic or "learn" in self.busy:
             return
         self.busy.add("learn")
-        self.btn_learn.state(["disabled"])
-        self.btn_quiz.state(["disabled"])
+        self._set_learn_buttons("disabled")
         lang = self.learn_lang.get()
         self.learn_out.delete("1.0", "end")
         self.learn_out.insert("end", "出题中…\n", "sys")
@@ -281,8 +343,7 @@ class App:
 
     def _learn_ready(self):
         self.busy.discard("learn")
-        self.btn_learn.state(["!disabled"])
-        self.btn_quiz.state(["!disabled"])
+        self._set_learn_buttons("!disabled")
 
     def _kb_search(self):
         q = self.kb_q.get().strip()
@@ -537,6 +598,9 @@ class App:
                 elif kind == "log_lc":
                     self.lc_out.insert("end", payload + "\n", "sys")
                     self.lc_out.see("end")
+                elif kind == "log_learn":
+                    self.learn_out.insert("end", payload + "\n", "sys")
+                    self.learn_out.see("end")
                 elif kind == "log_task":
                     self.task_log.insert("end", payload + "\n", "sys")
                     self.task_log.see("end")

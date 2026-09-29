@@ -22,6 +22,15 @@ SYS_ENGINEER = (
 )
 
 
+def review_lang(name: str):
+    """按扩展名决定静态检查语言；非代码文件返回 None（不做语言级检查）。"""
+    if name.endswith(".py"):
+        return "python"
+    if name.endswith((".js", ".mjs")):
+        return "javascript"
+    return None
+
+
 def _fmt_issues(issues):
     if not issues:
         return "（无）"
@@ -200,7 +209,9 @@ severity=high 的问题将导致计划打回重做。只输出 JSON。"""
         """静态检查 + LLM 代码评审。"""
         issues = []
         for name, code in files.items():
-            lang = "javascript" if name.endswith((".js", ".mjs")) else "python"
+            lang = review_lang(name)
+            if not lang:
+                continue  # html/css/md 等非代码文件不做语言级语法检查
             for i in codecheck.full_check(code, lang):
                 issues.append({"severity": "high", "desc": f"[静态检查:{name}] {i}", "fix": "按提示修复"})
         code_digest = "\n\n".join(f"### {n}\n```python\n{c[:3000]}\n```" for n, c in files.items())

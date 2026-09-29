@@ -2,8 +2,13 @@
 """learn-agent 命令行入口。
 
 常用命令：
+  python main.py gui                      桌面图形应用
   python main.py chat                      交互对话（默认用训练出的 learn-agent 模型）
-  python main.py learn python 装饰器        学习主题（教程+沉淀知识库）
+  python main.py path python              查看分阶段学习路径与进度
+  python main.py start python             引导式学习：自动学下一课（从0开始）
+  python main.py learn python 装饰器        学习指定主题（教程+沉淀知识库）
+  python main.py review python            阶段复习（知识地图+综合练习）
+  python main.py capstone python          进阶实战：自主完成前后端/算法项目
   python main.py quiz python 生成器         生成测验
   python main.py solve two-sum             解力扣题（走完整工作流）
   python main.py problems                  列出题库
@@ -76,6 +81,31 @@ def cmd_chat(args):
 def cmd_learn(args):
     from modules.learning import LearningModule
     print(LearningModule().learn(args.lang, args.topic))
+
+
+def cmd_start(args):
+    """引导式学习：自动学习下一课。"""
+    from modules.learning import LearningModule
+    lm = LearningModule()
+    print(lm.learn(args.lang, None))
+
+
+def cmd_path(args):
+    from modules.learning import LearningModule
+    print(LearningModule().path(args.lang))
+
+
+def cmd_review(args):
+    from modules.learning import LearningModule
+    print(LearningModule().review(args.lang))
+
+
+def cmd_capstone(args):
+    from modules.learning import LearningModule
+    res = LearningModule().capstone(args.lang)
+    print("\n==== 结果 ====")
+    print(res["summary"])
+    print(f"项目目录: {res.get('workspace', '-')}")
 
 
 def cmd_quiz(args):
@@ -166,8 +196,16 @@ def main():
                                  description="编程学习与开发 Agent（本地大模型驱动）")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("chat").set_defaults(fn=cmd_chat)
-    p = sub.add_parser("learn"); p.add_argument("lang"); p.add_argument("topic")
+    p = sub.add_parser("learn"); p.add_argument("lang"); p.add_argument("topic", nargs="?")
     p.set_defaults(fn=cmd_learn)
+    p = sub.add_parser("start"); p.add_argument("lang")
+    p.set_defaults(fn=cmd_start)
+    p = sub.add_parser("path"); p.add_argument("lang")
+    p.set_defaults(fn=cmd_path)
+    p = sub.add_parser("review"); p.add_argument("lang")
+    p.set_defaults(fn=cmd_review)
+    p = sub.add_parser("capstone"); p.add_argument("lang")
+    p.set_defaults(fn=cmd_capstone)
     p = sub.add_parser("quiz"); p.add_argument("lang"); p.add_argument("topic")
     p.set_defaults(fn=cmd_quiz)
     sub.add_parser("problems").set_defaults(fn=cmd_problems)

@@ -69,11 +69,13 @@
 
   <!-- 学习 -->
   <section id="p-learn" class="panel">
-    <p class="stat">学习 = 生成教程 + 自动沉淀知识库（学习即训练）。</p>
+    <p class="stat">七门语言分阶段路径（L0零基础→L6算法）。学习自动沉淀知识库（学习即训练），学完可进阶实战。</p>
     <div class="row">
       <select id="learn-lang" style="max-width:160px"></select>
-      <input id="learn-topic" placeholder="主题，例：装饰器 / Promise / Stream">
-      <button class="go" onclick="runLearn()">学习</button>
+      <input id="learn-topic" placeholder="主题（留空=引导式学下一课）">
+      <button class="go" onclick="runLearn(false)">学习</button>
+      <button class="go" onclick="showPath()">路径</button>
+      <button class="go" onclick="runLearn(true)">进阶实战</button>
     </div>
     <div id="learn-jobs"></div>
   </section>
@@ -156,10 +158,17 @@ async function runTask() {
   await fetch('/api/task', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({desc: d})});
   $('#task-desc').value = ''; refreshJobs();
 }
-async function runLearn() {
-  const lang = $('#learn-lang').value, topic = $('#learn-topic').value.trim(); if (!topic) return;
-  await fetch('/api/learn', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({lang, topic})});
-  $('#learn-topic').value = ''; refreshJobs();
+async function runLearn(capstone) {
+  const lang = $('#learn-lang').value, topic = $('#learn-topic').value.trim();
+  await fetch('/api/learn', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({lang, topic, capstone})});
+  if (!capstone) $('#learn-topic').value = '';
+  refreshJobs();
+}
+async function showPath() {
+  const lang = $('#learn-lang').value;
+  const r = await (await fetch('/api/path?lang=' + encodeURIComponent(lang))).json();
+  $('#learn-jobs').innerHTML = `<div class="job"><pre class="result">${esc(r.path || r.error)}</pre></div>`;
 }
 async function solve(slug) {
   await fetch('/api/solve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({slug})});

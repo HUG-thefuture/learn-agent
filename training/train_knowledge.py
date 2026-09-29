@@ -55,6 +55,40 @@ synchronized/Lock; ExecutorService + shutdown; @Override/@FunctionalInterface。
 LRU: 哈希表+双向链表, 头部最新尾部最旧。
 复杂度: 数组遍历 O(n), 排序 O(nlogn), 嵌套循环警惕 O(n^2)。
 """},
+    {"id": "seed:cpp:memory", "title": "C++ 内存管理与RAII", "lang": "c++",
+     "tags": ["memory", "best-practice"], "source": "seed", "text": """
+C++ 手动内存管理核心是 RAII：资源获取即初始化，把资源生命周期绑定到对象作用域。
+new/delete 必须成对；优先用智能指针：unique_ptr 独占(零开销,不可复制)、shared_ptr 引用计数、
+weak_ptr 打破循环引用。容器选型：vector 默认首选、map 红黑树有序、unordered_map 哈希更快。
+禁用裸 new/delete；栈对象优先；返回值用值语义或 unique_ptr。检测泄漏：Valgrind/ASan。
+"""},
+    {"id": "seed:go:concurrency", "title": "Go 并发与工程要点", "lang": "go",
+     "tags": ["concurrency", "best-practice"], "source": "seed", "text": """
+goroutine 轻量协程：go f() 启动；channel 通信：ch := make(chan T, n)，无缓冲同步、有缓冲异步。
+共享状态用 sync.Mutex 保护或干脆用 channel 传递数据（不要通过共享内存来通信）。
+select 多路复用；context 控制超时与取消。defer 延迟释放资源(文件/锁)。
+错误处理惯例：if err != nil 逐层返回；errors.Is/As 判类型。go test 表驱动测试。
+net/http 标准库即可起 REST 服务；json.NewDecoder/Encoder 处理请求响应。
+"""},
+    {"id": "seed:sql:basics", "title": "SQL 核心速查", "lang": "sql",
+     "tags": ["cheatsheet", "database"], "source": "seed", "text": """
+CRUD: INSERT INTO t(cols) VALUES(...); SELECT cols FROM t WHERE cond ORDER BY col DESC LIMIT n;
+UPDATE t SET c=v WHERE id=...; DELETE FROM t WHERE id=...（务必带WHERE）。
+聚合: COUNT/SUM/AVG/MIN/MAX + GROUP BY + HAVING(聚合后过滤)。
+JOIN: INNER JOIN 取交集、LEFT JOIN 保左表；子查询与 EXISTS。
+索引加速 WHERE/JOIN 列；事务 BEGIN/COMMIT/ROLLBACK 保证原子性。
+防注入：永远参数化查询(占位符?)，不拼接字符串。外键约束保证引用完整性。
+"""},
+    {"id": "seed:web:frontend", "title": "HTML/CSS 前端基础速查", "lang": "html-css",
+     "tags": ["frontend", "cheatsheet"], "source": "seed", "text": """
+HTML 骨架: <!DOCTYPE html> + html/head(meta charset/viewport, title)/body。
+常用标签: div/span 语义化 header/nav/main/section/footer; a href; img alt; ul/ol/li; form+input/button。
+CSS: 选择器(类./id#/后代空格); 盒子模型 content+padding+border+margin;
+布局: Flex(align/justify 一维) 与 Grid(二维 grid-template-columns) 优先于 float;
+定位 static/relative/absolute/fixed/sticky; 响应式 @media (max-width:768px);
+变量 --c: value + var(--c); 交互 transition/transform/hover。
+调试: F12 元素面板看盒子与样式; Console 看报错。
+"""},
     {"id": "seed:web:fullstack", "title": "前后端开发要点", "lang": "general",
      "tags": ["fullstack"], "source": "seed", "text": """
 后端: RESTful 设计(GET查/POST增/PUT改/DELETE删); 参数校验; 统一错误处理; CORS 配置;

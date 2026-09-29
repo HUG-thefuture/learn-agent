@@ -3,7 +3,13 @@
 基于**本地大模型**（Ollama / Qwen3）+ **网络数据检索** + 可选**外部大模型 API 增强**的编程学习助手。
 
 核心能力：
-- **学语言**：Python / JavaScript / Java 课程化学习，教程自动沉淀进知识库（学习即训练）
+- **七门语言、零基础到进阶**：Python / JavaScript / Java / C++ / Go / SQL / HTML-CSS 前端，
+  每门按 **L0 零基础 → L1 核心 → L2 进阶 → L3 工程 → L4 后端(实战) → L5 前端协同 → L6 算法** 分阶段课程
+- **引导式学习**：`start` 自动从第一课推进（学习即记录进度），`path` 随时查看路径与完成度，
+  `review` 生成阶段复习（知识地图+综合练习），`quiz` 随堂测验
+- **进阶实战（学以致用）**：`capstone` 让 Agent 用你已学的知识**自主完成**真实项目并走完整质量工作流——
+  Python 个人博客系统(FastAPI+SQLite+前端)、JS 待办全栈应用(Express)、Java 成绩管理、C++ 日志分析器、
+  Go 短链接服务、SQL 电商库表与报表、HTML/CSS 响应式个人主页
 - **刷算法**：内置 12 道力扣经典题（带可运行测试），解题走完整质量工作流并自动判题、查内存泄漏
 - **做开发**：FastAPI / Flask / Express + 前端脚手架一键生成，生成即体检
 - **函数调用**：LLM function-calling 工具循环（联网搜索 / 运行代码 / 检索知识库 / 代码体检）
@@ -52,10 +58,19 @@ python main.py train --topics 5
 :: 对话（默认用训练出的 learn-agent 模型）
 python main.py chat
 
-:: 学一个主题（教程 + 沉淀知识库）
+:: 学一个主题（教程 + 沉淀知识库 + 记录进度）
 python main.py learn python 装饰器
 python main.py learn javascript Promise
-python main.py quiz python 生成器
+
+:: 零基础引导式学习（推荐入门方式）
+python main.py path python       # 查看分阶段路径与进度
+python main.py start python      # 自动学下一课（连跑即从0到进阶）
+python main.py review python     # 阶段复习
+python main.py quiz python 生成器 # 随堂测验
+
+:: 进阶实战：Agent 用你已学的知识自主完成项目（前后端/算法）
+python main.py capstone python   # 个人博客系统(FastAPI+SQLite+前端)
+python main.py capstone sql      # 电商数据库设计与报表
 
 :: 解力扣题（完整工作流 + 自动判题）
 python main.py problems
