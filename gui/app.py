@@ -9,6 +9,7 @@ import json
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
@@ -735,6 +736,13 @@ class App:
             import requests
             names = [m["name"] for m in requests.get(
                 BASE_URL + "/api/tags", timeout=3).json().get("models", [])]
+            # 预加载默认模型（learn-agent 优先），首次对话零冷启动
+            preload = next((m for m in names if m.startswith("learn-agent")),
+                           names[0] if names else None)
+            if preload:
+                requests.post(BASE_URL + "/api/chat", json={
+                    "model": preload, "keep_alive": "30m", "stream": False,
+                    "messages": [{"role": "user", "content": "ready"}]}, timeout=90)
         except Exception:
             names = []
         ordered = (["learn-agent"] + [m for m in names if not m.startswith("learn-agent")]) \
@@ -742,13 +750,50 @@ class App:
         self.q.put(("models", ordered))
 
 
+def _install_excepthook():
+    """打包版无控制台：任何未捕获异常落盘到 data/logs/gui_error.log。"""
+    import traceback
+    from core.config import data_dir
+
+    def hook(tp, val, tb):
+        p = data_dir() / "logs" / "gui_error.log"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}]\n")
+            traceback.print_exception(tp, val, tb, file=f)
+
+    sys.excepthook = hook
+    import threading
+    threading.excepthook = lambda a: hook(a.exc_type, a.exc_value, a.exc_traceback)
+
+
 def main(smoke=False):
     ensure_dirs()
-    root = tk.Tk()
-    App(root, smoke=smoke)
-    root.mainloop()
+    _install_excepthook()
+    marker = None
     if smoke:
-        print("GUI SMOKE OK")
+        from core.config import ROOT
+        marker = ROOT / "smoke_ok.txt"
+        (ROOT / "smoke_stage.txt").write_text("start", encoding="utf-8")
+    try:
+        root = tk.Tk()
+        App(root, smoke=smoke)
+        if smoke:
+            (ROOT / "smoke_stage.txt").write_text("before-mainloop", encoding="utf-8")
+        root.mainloop()
+        if smoke:
+            (ROOT / "smoke_stage.txt").write_text("after-mainloop", encoding="utf-8")
+    except Exception:
+        import traceback
+        from core.config import data_dir
+        with open(data_dir() / "logs" / "gui_error.log", "a", encoding="utf-8") as f:
+            f.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] main() fatal:\n")
+            traceback.print_exc(file=f)
+        raise
+    finally:
+        if smoke and marker:
+            marker.write_text("GUI SMOKE OK", encoding="utf-8")
+            print("GUI SMOKE OK")
 
 
 if __name__ == "__main__":

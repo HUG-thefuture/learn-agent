@@ -15,6 +15,12 @@ models/
 *.gguf
 *.safetensors
 
+# 打包产物
+build/
+*.exe
+smoke_ok.txt
+smoke_stage.txt
+
 # 训练证据（保留）：data/knowledge/index.json、data/datasets/*.jsonl、data/train_report.json
 # IDE
 .idea/

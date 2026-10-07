@@ -49,9 +49,24 @@ D:\learn-agent\
 
 ## 快速开始
 
+**桌面软件（推荐）**：双击桌面上的 **learn-agent** 图标（安装见下），或双击项目里的 `learn-agent.exe`。
+单文件 exe，自带运行时，启动后自动预加载 `learn-agent` 模型（对话零冷启动）。
+
+```bash
+:: 重新打包桌面 exe（改完代码后）
+pip install pyinstaller pillow
+python assets\make_icon.py
+python -m PyInstaller --noconfirm --onefile --windowed --icon D:\learn-agent\assets\learn-agent.ico ^
+  --name learn-agent --distpath . --workpath build --specpath build ^
+  --hidden-import modules.leetcode --hidden-import modules.devkit --hidden-import core.db --hidden-import modules.algo ^
+  learn-agent.pyw
+```
+
+> 若桌面快捷方式丢失：项目根目录有 `learn-agent.exe`，右键发送到桌面快捷方式即可。
+
 ```bash
 cd D:\learn-agent
-:: 桌面图形应用（推荐，双击 learn-agent-gui.bat 亦可）
+:: 命令行/源码方式启动桌面应用（与 exe 等价）
 python main.py gui
 
 :: 训练（蒸馏数据 -> 知识库 -> 生成本地定制模型 learn-agent）

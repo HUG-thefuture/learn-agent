@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 """全局配置加载。"""
 import os
+import sys
 from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent.parent
+# 打包成 exe(PyInstaller) 时以 exe 所在目录为项目根；源码运行时以仓库根为根
+if getattr(sys, "frozen", False):
+    ROOT = Path(sys.executable).resolve().parent
+else:
+    ROOT = Path(__file__).resolve().parent.parent
 
 _CFG = None
 
