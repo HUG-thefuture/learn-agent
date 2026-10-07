@@ -138,6 +138,43 @@ def cmd_solve(args):
         if t.get("leak"):
             print(f"内存检查: {t['leak']['detail'] or '未运行'}"
                   f"{' [泄漏!]' if t['leak']['leaky'] else ''}")
+    # 记入算法训练进度/错题本
+    try:
+        from modules import algo
+        ok = res["ok"] and (res.get("local_tests") or {}).get("passed", False)
+        algo.record(args.slug, ok, res["summary"][:200])
+        print("(已记入算法训练档案" + ("" if ok else "，错题本可在 `algo wrong` 查看") + ")")
+    except Exception:
+        pass
+
+
+def cmd_algo(args):
+    from modules import algo
+    if args.action == "plan":
+        print(algo.plan())
+    elif args.action == "next":
+        p, why = algo.next_problem(args.stage)
+        print(f"推荐({why}): {p['slug']}  {p['title']}  {p['difficulty']}" if p
+              else why)
+    elif args.action == "wrong":
+        print(algo.wrongbook())
+    elif args.action == "review":
+        print(algo.review_wrong())
+    elif args.action == "templates":
+        print(algo.templates())
+
+
+def cmd_languages(_args):
+    from modules.learning import LearningModule
+    m = LearningModule().languages()
+    print(f"支持 {len(m)} 门语言（内置详纲标★，其余按九阶段框架动态生成）：\n")
+    for k, v in m.items():
+        print(f"  {'★' if k in ('python', 'javascript', 'java', 'c++', 'go', 'sql', 'html-css') else ' '} {k:<16} {v}")
+
+
+def cmd_radar(_args):
+    from modules.learning import LearningModule
+    print(LearningModule().radar())
 
 
 def cmd_task(args):
@@ -206,6 +243,11 @@ def cmd_db(args):
         print(f"✅ 受影响 {r.get('affected')} 行")
 
 
+def cmd_eval(_args):
+    from evals.run_eval import run
+    run()
+
+
 def cmd_serve(_args):
     from webapp.app import app
     print("Web 控制台: http://127.0.0.1:7860")
@@ -233,6 +275,13 @@ def main():
     p.set_defaults(fn=cmd_review)
     p = sub.add_parser("capstone"); p.add_argument("lang")
     p.set_defaults(fn=cmd_capstone)
+    p = sub.add_parser("algo"); p.add_argument(
+        "action", choices=["plan", "next", "wrong", "review", "templates"])
+    p.add_argument("--stage", type=int, default=0)
+    p.set_defaults(fn=cmd_algo)
+    sub.add_parser("languages").set_defaults(fn=cmd_languages)
+    sub.add_parser("radar").set_defaults(fn=cmd_radar)
+    sub.add_parser("eval").set_defaults(fn=cmd_eval)
     p = sub.add_parser("quiz"); p.add_argument("lang"); p.add_argument("topic")
     p.set_defaults(fn=cmd_quiz)
     sub.add_parser("problems").set_defaults(fn=cmd_problems)

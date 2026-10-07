@@ -1,0 +1,58 @@
+{
+  "name": "Rust",
+  "runner": "cargo run",
+  "goal": "掌握 Rust 编程语言并能够独立开发高性能、安全的系统级应用",
+  "stages": {
+    "01 语言定位": [
+      "Rust 的设计哲学与适用场景",
+      "Rust 与其他语言（如 C、C++、Go）的对比",
+      "Rust 在系统编程、WebAssembly、嵌入式开发中的应用"
+    ],
+    "02 环境搭建": [
+      "安装 Rust 工具链（rustup）",
+      "配置 Cargo 项目结构",
+      "使用 Rust Playground 进行在线开发"
+    ],
+    "03 基础语法": [
+      "变量与可变性（mut 关键字）",
+      "类型系统与类型推断",
+      "函数定义与参数传递（包括引用与借用）"
+    ],
+    "04 核心数据结构": [
+      "数组、向量（Vec）、字符串（String）",
+      "哈希表（HashMap）与集合（HashSet）",
+      "元组与枚举（enum）的使用"
+    ],
+    "05 进阶特性": [
+      "所有权（Ownership）与借用（Borrowing）",
+      "生命周期（Lifetime）与引用的管理",
+      "模式匹配（match）与解构"
+    ],
+    "06 标准库与常用函数": [
+      "标准库中常用模块（如 std::io、std::fs）",
+      "迭代器（Iterator）与链式调用",
+      "错误处理（Result 与 Option）"
+    ],
+    "07 工程化": [
+      "Cargo.toml 配置与依赖管理",
+      "模块系统（mod）与 crate 的组织",
+      "构建与发布（cargo build, cargo publish）"
+    ],
+    "08 前后端实战": [
+      "使用 Rust 开发 RESTful API（如用 Actix 或 Rocket 框架）",
+      "使用 Rust 进行前端开发（如用 WebAssembly 与 WASM）",
+      "集成数据库（如 PostgreSQL 与 Diesel ORM）"
+    ],
+    "09 算法训练": [
+      "使用 Rust 实现经典算法（如排序、搜索）",
+      "性能优化与零成本抽象",
+      "使用 Rust 进行并发与多线程编程"
+    ]
+  },
+  "capstone": {
+    "name": "Rust 全栈博客系统",
+    "stack": "Rust + Actix + Diesel + PostgreSQL + WebAssembly",
+    "desc": "开发一个支持用户注册、登录、文章发布与评论的博客系统，后端使用 Rust 实现，前端使用 WebAssembly 技术实现，同时使用 PostgreSQL 存储数据并集成 Diesel ORM。"
+  },
+  "generated": "llm"
+}

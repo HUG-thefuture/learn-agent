@@ -76,6 +76,7 @@ def status():
             pass
     return jsonify(ollama=models, kb_docs=len(kb().docs),
                    curriculum={k: len(_flatten(v)) for k, v in CURRICULUM.items()},
+                   languages_total=len(LearningModule().languages()),
                    train_report=train_report,
                    external_enabled=bool(cfg()["external_model"].get("enabled")))
 
@@ -132,7 +133,7 @@ def api_solve():
 def api_learn():
     body = request.get_json(force=True)
     lang, topic = body.get("lang"), (body.get("topic") or "").strip()
-    if lang not in CURRICULUM:
+    if lang not in LearningModule().languages():
         return jsonify(error="lang 无效"), 400
     kind = "capstone" if body.get("capstone") else "learn"
     label = f"进阶实战 {lang}" if body.get("capstone") else \

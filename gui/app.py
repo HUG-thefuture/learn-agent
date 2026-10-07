@@ -204,9 +204,9 @@ class App:
         row = ttk.Frame(f)
         row.pack(fill="x", padx=10, pady=(10, 4))
         ttk.Label(row, text="语言").pack(side="left")
-        from modules.learning import CURRICULUM
-        self.learn_lang = ttk.Combobox(row, values=list(CURRICULUM),
-                                       width=12, state="readonly")
+        from modules.learning import LearningModule
+        self.learn_lang = ttk.Combobox(row, values=list(LearningModule().languages()),
+                                       width=14, state="readonly")
         self.learn_lang.current(0)
         self.learn_lang.pack(side="left", padx=4)
         ttk.Label(row, text="主题").pack(side="left", padx=(10, 0))

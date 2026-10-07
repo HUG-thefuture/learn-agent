@@ -35,6 +35,14 @@ def outputs_dir() -> Path:
 
 def ensure_dirs():
     for d in (data_dir(), outputs_dir(), data_dir() / "knowledge",
-              data_dir() / "datasets", outputs_dir() / "learning",
-              outputs_dir() / "leetcode", outputs_dir() / "projects"):
+              data_dir() / "datasets", data_dir() / "memory",
+              data_dir() / "logs", data_dir() / "evals",
+              data_dir() / "languages", data_dir() / "leetcode" / "templates",
+              data_dir() / "leetcode" / "easy", data_dir() / "leetcode" / "medium",
+              data_dir() / "leetcode" / "hard",
+              data_dir() / "projects" / "frontend",
+              data_dir() / "projects" / "backend",
+              data_dir() / "projects" / "fullstack",
+              outputs_dir() / "learning", outputs_dir() / "leetcode",
+              outputs_dir() / "projects"):
         d.mkdir(parents=True, exist_ok=True)

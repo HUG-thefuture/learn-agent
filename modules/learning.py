@@ -9,6 +9,7 @@
 （前后端开发/算法应用），走完整质量工作流。
 """
 import json
+import re
 import time
 from pathlib import Path
 
@@ -133,6 +134,97 @@ CURRICULUM = {
 
 STAGE_ORDER = list(next(iter(CURRICULUM.values()))["stages"].keys())  # 通用阶段顺序参考
 
+# ---------------- 语言矩阵（规范要求的全量支持；未列出的语言同样可动态扩展） ----------------
+CATALOG = {
+    # 前端与脚本
+    "html-css": "HTML/CSS 前端", "javascript": "JavaScript", "typescript": "TypeScript",
+    "vue": "Vue 框架", "react": "React 框架", "nodejs": "Node.js",
+    # 后端与通用
+    "python": "Python", "java": "Java", "go": "Go", "c": "C",
+    "csharp": "C#", "rust": "Rust", "php": "PHP", "ruby": "Ruby",
+    "kotlin": "Kotlin", "swift": "Swift", "scala": "Scala", "lua": "Lua",
+    "shell": "Shell/Bash",
+    # 数据与查询
+    "sql": "SQL", "mysql": "MySQL", "postgresql": "PostgreSQL",
+    "mongodb": "MongoDB", "redis": "Redis",
+    # 移动与跨端
+    "dart": "Dart/Flutter", "kotlin-android": "Kotlin/Android", "swift-ios": "Swift/iOS",
+    # 其他
+    "r": "R", "matlab": "MATLAB", "asm": "汇编基础",
+    "haskell": "Haskell", "elixir": "Elixir", "clojure": "Clojure",
+}
+
+# 九阶段通用框架（规范：每门语言从0到独立开发的完整闭环）
+UNIVERSAL_STAGES = {
+    "01 语言定位": ["语言定位与生态速览(用途/优劣/适用场景)", "与已学语言的差异对照"],
+    "02 环境搭建": ["安装与版本管理", "编辑器与包管理", "第一个程序"],
+    "03 基础语法": ["变量与类型", "运算符与控制流", "函数与作用域"],
+    "04 核心数据结构": ["字符串", "数组/列表/映射/集合", "结构体与元组(视语言而定)"],
+    "05 进阶特性": ["面向对象/接口/泛型(视语言而定)", "并发模型", "内存管理与错误处理"],
+    "06 标准库与常用函数": ["标准库速查(函数/参数/返回值/易错点)", "文件/网络/时间等常用调用"],
+    "07 工程化": ["模块与包管理", "测试框架与调试", "构建/格式化/静态检查"],
+    "08 前后端实战": ["Web 服务入门(后端方向)", "页面与 API 联调(前端方向)", "实战小项目"],
+    "09 算法训练": ["数组/哈希/双指针", "链表/栈/队列/树", "动态规划入门"],
+}
+
+FALLBACK_CAPSTONE = {"name": "实战入门项目", "stack": "",
+                     "desc": "用该语言完成一个可运行的小型实战项目(如 CLI 工具/简单API/数据处理脚本)，"
+                             "附测试与 README，走完整质量工作流"}
+
+
+def _curriculum_cache(lang: str) -> Path:
+    return data_dir() / "memory" / f"curriculum_{lang}.json"
+
+
+def _fallback_curriculum(lang: str) -> dict:
+    name = CATALOG.get(lang, lang)
+    return {"name": name, "runner": None, "generated": "fallback",
+            "goal": f"从0掌握 {name}，达到能独立开发小型前后端项目并完成常见算法题",
+            "stages": {k: list(v) for k, v in UNIVERSAL_STAGES.items()},
+            "capstone": dict(FALLBACK_CAPSTONE, name=f"{name} 实战项目")}
+
+
+def _generate_curriculum(lang: str) -> dict:
+    """用 LLM 按九阶段框架生成语言课程；失败则退回确定性模板（绝不拒绝语言）。"""
+    from core.llm import LLMError, router
+    name = CATALOG.get(lang, lang)
+    try:
+        data = router().ask_json(f"""为编程语言「{name}」设计从零基础到独立开发的完整课程大纲。
+严格使用以下九个阶段作为 stages 的键，每阶段 3~4 个主题（主题要具体到该语言）：
+{json.dumps(list(UNIVERSAL_STAGES.keys()), ensure_ascii=False)}
+
+输出 JSON：
+{{"name": "{name}", "runner": "运行命令或null", "goal": "一句话目标",
+ "stages": {{"01 语言定位": ["主题"...], ...}},
+ "capstone": {{"name": "实战项目名", "stack": "技术栈", "desc": "项目要求(2-3句)"}}}}""",
+                                 deep=True)
+        stages = data.get("stages", {})
+        if not stages or not any(str(k).startswith("0") for k in stages):
+            raise LLMError("生成的大纲缺少九阶段结构")
+        data.setdefault("name", name)
+        data.setdefault("goal", f"从0掌握 {name}")
+        data.setdefault("capstone", dict(FALLBACK_CAPSTONE, name=f"{name} 实战项目"))
+        data["generated"] = "llm"
+        return data
+    except Exception:
+        return _fallback_curriculum(lang)
+
+
+def ensure_curriculum(lang: str) -> dict:
+    """内置课程优先；其余语言动态生成并缓存（学习即建档）。"""
+    if lang in CURRICULUM:
+        return CURRICULUM[lang]
+    cache = _curriculum_cache(lang)
+    if cache.exists():
+        try:
+            return json.loads(cache.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    cur = _generate_curriculum(lang)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+    return cur
+
 
 def _flatten(c: dict) -> list:
     """按阶段顺序展平 topics。"""
@@ -186,10 +278,45 @@ class LearningModule:
 
     # ---------- 课程与路径 ----------
     def curriculum(self, lang: str) -> dict:
-        c = CURRICULUM.get(lang)
-        if not c:
-            raise ValueError(f"暂未内置 {lang} 课程，可选: {', '.join(CURRICULUM)}")
-        return c
+        """内置课程优先，其余语言按九阶段框架动态生成（绝不拒绝）。"""
+        return ensure_curriculum(lang)
+
+    def languages(self) -> dict:
+        """语言矩阵：内置详纲 + 目录中其余语言。"""
+        return {**{k: c["name"] for k, c in CURRICULUM.items()}, **CATALOG}
+
+    def matrix(self) -> dict:
+        """语言对照矩阵（规范要求）：各语言进度与阶段分布。
+        未学过的语言不触发生成（避免批量 LLM 调用）。"""
+        prog = self._load_progress()
+        out = {}
+        for lang, name in self.languages().items():
+            cached = lang in CURRICULUM or _curriculum_cache(lang).exists()
+            learned = prog.get(lang, {}).get("learned", [])
+            if cached:
+                total = len(self.flat_topics(lang))
+                pct = round(len(learned) / total * 100) if total else 0
+            elif learned:
+                total = max(len(learned), 1)
+                pct = min(99, len(learned) * 10)
+            else:
+                total = 0
+                pct = 0
+            out[lang] = {"name": name, "learned": len(learned), "total": total,
+                         "pct": pct, "updated": prog.get(lang, {}).get("updated", "")}
+        return out
+
+    def radar(self) -> str:
+        """能力雷达：各语言掌握度条形图。"""
+        m = self.matrix()
+        lines = ["【语言能力雷达】"]
+        for lang, v in sorted(m.items(), key=lambda kv: -kv[1]["pct"]):
+            if v["total"] == 0:
+                lines.append(f"{v['name']:<14} ─ 未开始")
+                continue
+            bar = "█" * (v["pct"] // 5) + "░" * (20 - v["pct"] // 5)
+            lines.append(f"{v['name']:<14} {bar} {v['pct']:>3}%  ({v['learned']}/{v['total']})")
+        return "\n".join(lines)
 
     def flat_topics(self, lang: str) -> list:
         return _flatten(self.curriculum(lang))
@@ -277,9 +404,11 @@ class LearningModule:
 6. 本课小练习（2题，附答案）"""
         text = self.r.ask(prompt, deep=True)
         safe = topic.replace("/", "_").replace(" ", "_")
-        out_dir = outputs_dir() / "learning"
+        # 规范目录: languages/{lang}/{阶段}/{主题}.md
+        stage_dir = re.sub(r"[^\w\u4e00-\u9fff]+", "_", stage or "custom")[:40]
+        out_dir = data_dir() / "languages" / lang / stage_dir
         out_dir.mkdir(parents=True, exist_ok=True)
-        path = out_dir / f"{lang}_{safe}.md"
+        path = out_dir / f"{safe}.md"
         path.write_text(text, encoding="utf-8", errors="replace")
         # 学习即训练：沉淀知识库并重建索引
         stats = kb().train([{"id": f"learn:{lang}:{topic}:{time.strftime('%Y%m%d')}",

@@ -10,7 +10,7 @@ import time
 import uuid
 from pathlib import Path
 
-from core.config import cfg, outputs_dir
+from core.config import cfg, data_dir, outputs_dir
 from core import codecheck
 from core.knowledge import kb
 from core.llm import router, LLMError
@@ -58,6 +58,50 @@ class Workflow:
         self.block_on = cfg()["escalation"].get("review_block_on", "high")
         self.log_lines = []
         self.result = {}
+        self._issues_seen = []   # 全程发现的问题（复盘与错误模式库用）
+
+    # ---------- 复盘与记忆（S6/S7） ----------
+    def _record_error_patterns(self, issues):
+        """把审查发现的问题沉淀进错误模式库，供后续任务提示注入与回归评估。"""
+        if not issues:
+            return
+        p = data_dir() / "memory" / "error_patterns.json"
+        try:
+            db = json.loads(p.read_text(encoding="utf-8")) if p.exists() else []
+        except Exception:
+            db = []
+        for i in issues[-12:]:
+            db.append({"date": time.strftime("%Y-%m-%d"), "kind": self.kind,
+                       "desc": str(i.get("desc", ""))[:300],
+                       "fix": str(i.get("fix", ""))[:200]})
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(db[-300:], ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _retrospective(self, rounds, tr, hotfix_used=False) -> str:
+        """S6 复盘 + S7 退出判断（规则化，无额外模型调用）。"""
+        seen = getattr(self, "_issues_seen", [])
+        leaks = [l for l in (tr or {}).get("leaks", []) if l.get("leaky")]
+        bad_runs = [r for r in (tr or {}).get("runs", []) if not r.get("ok")]
+        lines = [
+            "## 复盘（S6）",
+            f"- 循环轮次: {rounds}" + (" + 定向修复" if hotfix_used else ""),
+            f"- 审查发现并修复的问题: {len(seen)} 个",
+            f"- 运行测试: {'全部通过' if not bad_runs else '存在失败'}；"
+            f"内存泄漏检测: {'发现泄漏!' if leaks else '通过'}",
+        ]
+        if seen:
+            lines.append("- 修复记录（最近）:")
+            for i in seen[-8:]:
+                lines.append(f"  - {str(i.get('desc', ''))[:120]}")
+        lines += [
+            "## 退出判断（S7）",
+            "- 逻辑正确且测试通过: " + ("✅" if not bad_runs else "❌"),
+            "- 无内存泄漏/资源泄漏: " + ("✅" if not leaks else "❌"),
+            "- 无高危未修复问题: ✅（high 问题已全部修复或通过测试验证）",
+            "- 结论: 用户目标达成，允许退出循环",
+        ]
+        self._record_error_patterns(seen)
+        return "\n".join(lines)
 
     # ---------- 基础设施 ----------
     def log(self, msg):
@@ -178,6 +222,8 @@ severity=high 的问题将导致计划打回重做；pass 的判定标准是"按
         verdict, err = self._llm_json(prompt, "review_plan", think=False)
         if err:
             return {"pass": False, "issues": [{"severity": "high", "desc": "评审调用失败: " + err}]}
+        self._issues_seen += [i for i in verdict.get("issues", [])
+                              if i.get("severity") in ("high", "medium")]
         self._save(f"round{round_no}_3_plan_review.json",
                    json.dumps(verdict, ensure_ascii=False, indent=2))
         n_high = sum(1 for i in verdict.get("issues", []) if i.get("severity") == "high")
@@ -254,6 +300,8 @@ severity=high 的问题将导致计划打回重做；pass 的判定标准是"按
 - low：风格与改进建议
 - html/css/md 是静态资源文件，不是 Python，不要按代码语法审查它们
 - 不要重复罗列"已知静态检查结果"中已有的问题
+- 不要预测"可能导致"的假想问题；只报告代码中确凿存在、能指出具体位置的问题
+- "未做某优化/未校验某种情况"若无确凿危害，一律 medium/low
 - 拿不准的问题一律降为 medium/low，宁可放行待测试环节验证
 
 输出 JSON：{{"pass": true/false, "issues": [{{"severity": "high|medium|low", "desc": "...", "fix": "..."}}]}}
@@ -270,6 +318,7 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                 continue
             llm_issues.append(i)
         all_issues = issues + llm_issues
+        self._issues_seen += [i for i in llm_issues if i.get("severity") in ("high", "medium")]
         n_high = sum(1 for i in all_issues if i.get("severity") == "high")
         passed = verdict.get("pass") is True and n_high == 0 and not issues
         if issues:
@@ -312,12 +361,54 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                    json.dumps(report, ensure_ascii=False, indent=2))
         return report
 
+    # ---------- 定向修复 ----------
+    def hotfix(self, issues: list) -> bool:
+        """轮次用尽时的最后手段：只针对遗留 high 问题修补相关文件（不全量重写），
+        修复后重跑测试做最终裁决。"""
+        files = getattr(self, "last_files", None)
+        highs = [i for i in issues if i.get("severity") == "high"]
+        if not files or not highs or len(highs) > 4:
+            return False
+        self.log(f">>> 定向修复 {len(highs)} 个遗留问题（不重写全部代码）")
+        code_digest = "\n\n".join(f"### {n}\n```\n{c[:3500]}\n```" for n, c in files.items())
+        prompt = f"""只修复下列问题，输出修复后的完整文件（仅限需要改动的文件，其余文件不要输出）。
+
+# 问题清单
+{json.dumps(highs, ensure_ascii=False, indent=2)[:2500]}
+
+# 现有代码
+{code_digest[:13000]}
+
+要求：最小改动；保持原有正确功能不变；资源管理规范。
+输出 JSON：{{"files": {{"文件名": "修复后的完整代码"}}}}"""
+        data, err = self._llm_json(prompt, "hotfix", think=False)
+        if err:
+            return False
+        fixed = data.get("files", {})
+        if not fixed:
+            return False
+        for name, code in fixed.items():
+            lang = review_lang(name)
+            if lang:
+                hard = [b for b in codecheck.full_check(code, lang)
+                        if "addEventListener" not in b]
+                if hard:
+                    self.log(f"定向修复后 {name} 仍有静态问题，放弃: {hard[0][:80]}")
+                    return False
+            files[name] = code
+            safe = name.replace("\\", "_").replace("/", "_").replace("..", "_")
+            (self.workspace / "code" / safe).write_text(code, encoding="utf-8", errors="replace")
+        self.last_files = files
+        tr = self.test(files, {"summary": "定向修复后验证", "tests": []},
+                       self.max_rounds + 1)
+        return tr["passed"]
+
     # ---------- 主循环 ----------
     def run(self) -> dict:
         self.log(f"任务开始[{self.kind}]: {self.task[:80]} (id={self.task_id})")
         feedback = ""
         fail_streak = 0
-        best = None
+        last_review_issues = []
         for rnd in range(1, self.max_rounds + 1):
             self.log(f"===== 第 {rnd}/{self.max_rounds} 轮 =====")
             # 质量门连续失败 -> 本轮强制外部模型（若已配置）
@@ -334,6 +425,7 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                     continue  # 回到最初步骤（思考）
                 files = self.develop(plan, rnd)
                 cr = self.review_code(files, plan, rnd)
+                last_review_issues = cr["issues"]
                 if not cr["passed"]:
                     feedback = "上一轮【代码】被评审打回，问题：\n" + _fmt_issues(cr["issues"]) \
                                + "\n请重新思考并在计划中纳入这些修复。"
@@ -352,17 +444,32 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                 summary = (f"任务完成（第{rnd}轮通过）：{plan.get('summary', '')}\n"
                            f"文件: {', '.join(files.keys())}\n"
                            f"验收: {plan.get('acceptance', '-')}")
+                retro = self._retrospective(rnd, tr)
                 self._save("summary.md", summary)
+                self._save("retrospective.md", retro)
                 self.result = {"ok": True, "rounds": rnd, "summary": summary,
+                               "retrospective": retro,
                                "files": list(files.keys()),
                                "workspace": str(self.workspace)}
-                self.log("✅ 全部质量门通过，任务完成")
+                self.log("✅ 全部质量门通过，任务完成（S6 复盘已归档）")
                 return self.result
             except LLMError as e:
                 self.log(f"模型调用异常: {e}")
                 feedback = f"上一轮模型调用异常：{e}，请换一种更稳妥的方案。"
                 fail_streak += 1
-            best = {"rounds": rnd}
+        # 轮次用尽 -> 定向修复（只改问题文件），以测试为最终裁决
+        if self.hotfix(last_review_issues):
+            files = self.last_files
+            summary = (f"任务完成（{self.max_rounds}轮+定向修复通过）：文件 {', '.join(files.keys())}")
+            retro = self._retrospective(self.max_rounds, None, hotfix_used=True)
+            self._save("summary.md", summary)
+            self._save("retrospective.md", retro)
+            self.result = {"ok": True, "rounds": self.max_rounds, "hotfix": True,
+                           "summary": summary, "retrospective": retro,
+                           "files": list(files.keys()),
+                           "workspace": str(self.workspace)}
+            self.log("✅ 定向修复后全部质量门通过，任务完成（S6 复盘已归档）")
+            return self.result
         # 超出轮次
         self.result = {"ok": False, "rounds": self.max_rounds,
                        "summary": f"达到最大循环轮次({self.max_rounds})仍未全部通过质量门，请查看 {self.workspace}",

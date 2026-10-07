@@ -157,6 +157,63 @@ class TestDB(unittest.TestCase):
         self.assertIn("error", r)
 
 
+class TestLanguageMatrix(unittest.TestCase):
+    def test_catalog_size(self):
+        from modules.learning import CATALOG, CURRICULUM
+        all_langs = {**{k: c["name"] for k, c in CURRICULUM.items()}, **CATALOG}
+        self.assertGreaterEqual(len(all_langs), 25, "语言矩阵应覆盖25+门")
+        for group in ("typescript", "rust", "haskell", "mongodb", "shell"):
+            self.assertIn(group, all_langs)
+
+    def test_fallback_curriculum_nine_stages(self):
+        from modules.learning import _fallback_curriculum
+        c = _fallback_curriculum("haskell")
+        self.assertEqual(len(c["stages"]), 9, "九阶段框架")
+        self.assertIn("capstone", c)
+        self.assertTrue(all(v for v in c["stages"].values()))
+
+    def test_matrix_no_llm_for_unknown(self):
+        """matrix/radar 对未学语言不得触发 LLM 生成（只统计内置/缓存/有进度者）。"""
+        from modules.learning import LearningModule
+        lm = LearningModule()
+        m = lm.matrix()
+        self.assertIn("python", m)
+        # 未学且未生成的语言 total=0
+        fresh = [k for k, v in m.items() if v["total"] == 0]
+        self.assertTrue(all(m[k]["learned"] == 0 for k in fresh))
+
+
+class TestAlgo(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from modules import algo
+        self.algo = algo
+        self._tmp = tempfile.TemporaryDirectory()
+        algo._path = lambda: Path(self._tmp.name) / "algo_progress.json"
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_bank_size(self):
+        from modules.leetcode import PROBLEMS
+        self.assertGreaterEqual(len(PROBLEMS), 20)
+        from modules.algo import PROBLEM_STAGE
+        for p in PROBLEMS:
+            self.assertIn(p["slug"], PROBLEM_STAGE, f"{p['slug']} 未映射阶段")
+
+    def test_plan_next_record(self):
+        plan = self.algo.plan()
+        self.assertIn("阶段一", plan)
+        p, why = self.algo.next_problem(0)
+        self.assertIsNotNone(p)
+        self.algo.record(p["slug"], False, "测试失败详情")
+        self.assertIn(p["slug"], self.algo.wrongbook())
+        # 重做通过后清除错题
+        self.algo.record(p["slug"], True, "")
+        w, why2 = self.algo.next_problem(0)
+        self.assertNotEqual(w["slug"], p["slug"], "已解决题目不应再次推荐")
+
+
 class TestWorkflow(unittest.TestCase):
     def test_review_lang_filter(self):
         """非代码文件不应做语言级静态检查（曾误报 html/css 语法错误）。"""

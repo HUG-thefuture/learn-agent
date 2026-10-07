@@ -1,0 +1,41 @@
+{
+  "date": "2026-10-07 12:23",
+  "env": {
+    "ollama": {
+      "ok": true,
+      "models": [
+        "learn-agent:latest",
+        "qwen3:14b",
+        "qwen3:8b"
+      ]
+    },
+    "mysql": {
+      "ok": true,
+      "server": "127.0.0.1:3306",
+      "version": "10.4.14-MariaDB"
+    },
+    "web": {
+      "ok": false,
+      "results": 0
+    }
+  },
+  "kb": {
+    "docs": 49,
+    "vocab": 4204,
+    "hit_rate": 1.0,
+    "n": 49
+  },
+  "judge": {
+    "good_accepted": true,
+    "bad_rejected": true,
+    "judge_correct": true
+  },
+  "workflows": {
+    "tasks": 2,
+    "success": 2,
+    "hotfix": 0,
+    "rounds": [],
+    "last_train": "2026-09-28 01:45:14"
+  },
+  "seconds": 13.5
+}
