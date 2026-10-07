@@ -320,9 +320,8 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
         all_issues = issues + llm_issues
         self._issues_seen += [i for i in llm_issues if i.get("severity") in ("high", "medium")]
         n_high = sum(1 for i in all_issues if i.get("severity") == "high")
-        passed = verdict.get("pass") is True and n_high == 0 and not issues
-        if issues:
-            passed = False
+        hard_static = [i for i in issues if i.get("severity") == "high"]
+        passed = verdict.get("pass") is True and n_high == 0 and not hard_static
         self._save(f"round{round_no}_5_code_review.json",
                    json.dumps({"pass": passed, "issues": all_issues}, ensure_ascii=False, indent=2))
         self.log(f"代码审查: {'通过' if passed else f'不通过(high={n_high}, 共{len(all_issues)}项)'}")
@@ -331,11 +330,12 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
     def test(self, files: dict, plan, round_no: int):
         """运行代码 + 泄漏检测。"""
         report = {"runs": [], "leaks": [], "passed": True}
-        for name, code in files.items():
-            if not name.endswith(".py"):
-                continue
-            has_main = "__main__" in code or re.search(r"(?m)^print\(", code)
-            r = codecheck.run_python_code(code, timeout=cfg()["testing"]["timeout"])
+        py_files = {n: c for n, c in files.items() if n.endswith(".py")}
+        for name, code in py_files.items():
+            # 兄弟文件一并写入，支持多文件互相 import
+            others = {n: c for n, c in py_files.items() if n != name}
+            r = codecheck.run_python_code(code, extra_files=others,
+                                          timeout=cfg()["testing"]["timeout"])
             entry = {"file": name, "ok": r["ok"], "output": r["output"][-800:],
                      "error": r["error"]}
             report["runs"].append(entry)
@@ -345,12 +345,13 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
             else:
                 self.log(f"测试通过[{name}]")
             # 对定义了函数的文件做泄漏检测
-            import re as _re
-            funcs = _re.findall(r"(?m)^def\s+([a-zA-Z_]\w*)\s*\(", code)
+            funcs = re.findall(r"(?m)^def\s+([a-zA-Z_]\w*)\s*\(", code)
             main_funcs = [f for f in funcs if not f.startswith("_")][:1]
             if main_funcs and "input(" not in code:
-                leak = codecheck.memory_leak_check(code, main_funcs[0], [["$i"]] if any(
-                    k in main_funcs[0] for k in ("fib", "climb", "factor")) else [[5], [10], [20]])
+                leak = codecheck.memory_leak_check(
+                    code, main_funcs[0],
+                    [["$i"]] if any(k in main_funcs[0] for k in ("fib", "climb", "factor"))
+                    else [[5], [10], [20]], extra_files=others)
                 report["leaks"].append({"file": name, "func": main_funcs[0], **leak})
                 if leak["leaky"]:
                     report["passed"] = False
@@ -362,12 +363,12 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
         return report
 
     # ---------- 定向修复 ----------
-    def hotfix(self, issues: list) -> bool:
+    def hotfix(self, issues: list, _repaired: int = 0) -> bool:
         """轮次用尽时的最后手段：只针对遗留 high 问题修补相关文件（不全量重写），
-        修复后重跑测试做最终裁决。"""
+        修复后重跑测试。测试仍失败则拿确切报错再做一轮测试驱动修复（上限2层）。"""
         files = getattr(self, "last_files", None)
         highs = [i for i in issues if i.get("severity") == "high"]
-        if not files or not highs or len(highs) > 4:
+        if not files or not highs or len(highs) > 6:
             return False
         self.log(f">>> 定向修复 {len(highs)} 个遗留问题（不重写全部代码）")
         code_digest = "\n\n".join(f"### {n}\n```\n{c[:3500]}\n```" for n, c in files.items())
@@ -387,21 +388,65 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
         fixed = data.get("files", {})
         if not fixed:
             return False
-        for name, code in fixed.items():
-            lang = review_lang(name)
-            if lang:
+
+        def static_bad(codes: dict):
+            """返回第一个静态不过的 (文件名, 错误)；全部通过返回 None。"""
+            for name, code in codes.items():
+                lang = review_lang(name)
+                if not lang:
+                    continue
                 hard = [b for b in codecheck.full_check(code, lang)
                         if "addEventListener" not in b]
                 if hard:
-                    self.log(f"定向修复后 {name} 仍有静态问题，放弃: {hard[0][:80]}")
+                    return name, hard[0]
+            return None
+
+        # 静态门校验；不过则带错误反馈重试一次
+        for attempt in (1, 2):
+            bad = static_bad(fixed)
+            if bad is None:
+                for name, code in fixed.items():
+                    files[name] = code
+                    safe = name.replace("\\", "_").replace("/", "_").replace("..", "_")
+                    (self.workspace / "code" / safe).write_text(
+                        code, encoding="utf-8", errors="replace")
+                self.last_files = files
+                tr = self.test(files, {"summary": "定向修复后验证", "tests": []},
+                               self.max_rounds + 1)
+                if tr["passed"]:
+                    return True
+                if _repaired >= 1:
                     return False
-            files[name] = code
-            safe = name.replace("\\", "_").replace("/", "_").replace("..", "_")
-            (self.workspace / "code" / safe).write_text(code, encoding="utf-8", errors="replace")
-        self.last_files = files
-        tr = self.test(files, {"summary": "定向修复后验证", "tests": []},
-                       self.max_rounds + 1)
-        return tr["passed"]
+                # 测试驱动修复：用确切 traceback 精准再修一轮
+                test_issues = [{"severity": "high",
+                                "desc": f"[测试失败:{r['file']}] {(r.get('error') or r.get('output') or '')[:450]}",
+                                "fix": "按报错修复该文件（常见：缺 import/名称拼写/库版本API不匹配）"}
+                               for r in tr["runs"] if not r["ok"]]
+                self.log(f">>> 测试驱动修复 {len(test_issues)} 个失败文件（带确切报错）")
+                return self.hotfix(test_issues, _repaired=_repaired + 1)
+            err_file, err_msg = bad
+            self.log(f"定向修复后 {err_file} 仍有静态问题(attempt {attempt}): {err_msg[:80]}")
+            if attempt == 2:
+                return False
+            retry_prompt = f"""你上次的修复输出存在静态检查错误，请修复它并重新输出完整文件。
+
+# 文件
+{err_file}
+
+# 静态检查错误
+{err_msg}
+
+# 你上次输出的代码
+```
+{fixed.get(err_file, '')[:4000]}
+```
+
+只输出 JSON：{{"files": {{"{err_file}": "修复后的完整代码"}}}}"""
+            data, err = self._llm_json(retry_prompt, "hotfix_retry", think=False)
+            if err:
+                return False
+            fixed.update(data.get("files", {}))
+        return False
 
     # ---------- 主循环 ----------
     def run(self) -> dict:

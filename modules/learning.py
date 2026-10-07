@@ -36,7 +36,8 @@ CURRICULUM = {
         },
         "capstone": {"name": "个人博客系统（前后端）", "stack": "fastapi",
                      "desc": "FastAPI + SQLite 实现文章 CRUD 的 REST API（/api/posts），"
-                             "附原生 HTML/JS 前端页面（列表+新建表单），提供 pytest 可跑的接口测试与健康检查"},
+                             "附原生 HTML/JS 前端页面（列表+新建表单），提供 pytest 可跑的接口测试与健康检查。"
+                             "数据层直接用 sqlite3 标准库，不要引入 SQLAlchemy 等 ORM"},
     },
     "javascript": {
         "name": "JavaScript", "runner": "node",

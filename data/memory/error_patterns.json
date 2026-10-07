@@ -1,0 +1,62 @@
+[
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "测试未明确提及对 SQLite 数据库操作的事务处理与资源释放的测试覆盖，可能导致遗漏相关边界条件",
+    "fix": "在测试计划中增加对数据库事务处理、上下文管理及资源释放的测试用例，确保数据库连接正确关闭"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "main.py 中缺少 if __name__ == \"__main__\": 的完整判断，导致代码无法正常运行",
+    "fix": "将 if __name__ == \"__main__\" 补全为 if __name__ == \"__main__\": 并添加 uvicorn 启动代码"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "test_api.py 中 test_xss_protection 函数中的 escapeHtml 函数定义语法错误，使用了 JavaScript 的箭头函数语法，不符合 Python 语法",
+    "fix": "将 escapeHtml 函数改为符合 Python 语法的实现，例如使用 re.sub 或手动实现转义逻辑"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "test_api.py 中 test_xss_protection 函数中存在未闭合的字符串字面量，导致语法错误",
+    "fix": "修复 test_xss_protection 函数中未闭合的字符串字面量，确保代码语法正确"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "测试计划中未明确提及对数据库操作的并发或事务处理的测试，可能影响数据一致性",
+    "fix": "在测试计划中增加对数据库操作的事务处理和并发场景的测试用例"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "main.py 中的 delete_post_route 函数返回的 JSON 对象不完整，缺少 'message' 字段，这会导致测试用例 test_delete_post 失败，因为测试期望返回的 JSON 中包含 'message' 字段。",
+    "fix": "在 delete_post_route 函数中，将返回的 JSON 对象修改为 {'message': 'Post deleted successfully'}"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "测试用例中未明确提及对无效 ID 的处理，如删除或获取不存在的文章时的响应处理，可能导致边界条件未完全覆盖。",
+    "fix": "在测试用例中增加对无效 ID 的测试，确保接口能正确返回错误信息或 404 状态码。"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "删除文章接口（/api/posts/{post_id}）未返回包含 message 字段的 JSON，与测试计划要求不符",
+    "fix": "在 delete_post_route 函数中添加返回 JSON 的逻辑，例如 return {'message': 'Post deleted successfully'}"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "创建文章接口（/api/posts）返回的 created_at 字段为空字符串，与数据库实际存储的 ISO 格式时间不一致",
+    "fix": "从数据库查询实际的 created_at 值并返回，而不是使用空字符串"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "project",
+    "desc": "update_post_route 函数中，若 update_post 返回 False（即未找到文章），应直接返回 404 错误，而不是继续执行后续代码",
+    "fix": "在调用 update_post 后立即检查返回值，若为 False 则抛出 404 错误"
+  }
+]

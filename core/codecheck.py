@@ -141,8 +141,10 @@ def static_issues(code: str, lang: str = "python"):
 
 # ---------------- 测试执行 ----------------
 def run_python_code(code: str, func: str = None, args_spec: list = None,
-                    rounds: int = None, timeout: int = None) -> dict:
+                    rounds: int = None, timeout: int = None,
+                    extra_files: dict = None) -> dict:
     """把 code 写入临时文件执行。
+    - extra_files: 同项目兄弟文件（支持多文件互相 import）
     - func+args_spec 给定时：执行 leak 检测（args_spec 中 "$i" 表示轮次）
     - 否则：直接运行脚本，捕获 stdout
     返回 {ok, output, leak:{growth,...}, error}
@@ -153,6 +155,9 @@ def run_python_code(code: str, func: str = None, args_spec: list = None,
     with tempfile.TemporaryDirectory() as d:
         sol = Path(d) / "solution.py"
         sol.write_text(code, encoding="utf-8")
+        for name, content in (extra_files or {}).items():
+            safe = name.replace("\\", "_").replace("/", "_").replace("..", "_")
+            (Path(d) / safe).write_text(content, encoding="utf-8", errors="replace")
         if func:
             runner = Path(d) / "_leak_runner.py"
             runner.write_text(_LEAK_RUNNER, encoding="utf-8")
@@ -181,10 +186,11 @@ def run_python_code(code: str, func: str = None, args_spec: list = None,
         return res
 
 
-def memory_leak_check(code: str, func: str, args_spec: list) -> dict:
+def memory_leak_check(code: str, func: str, args_spec: list,
+                      extra_files: dict = None) -> dict:
     """专项泄漏检测：growth 为两轮 N 次调用之间的堆增长。"""
     tc = cfg()["testing"]
-    r = run_python_code(code, func=func, args_spec=args_spec,
+    r = run_python_code(code, func=func, args_spec=args_spec, extra_files=extra_files,
                         rounds=tc["leak_rounds"], timeout=tc["timeout"] + 30)
     verdict = {"leaky": False, "growth": None, "detail": ""}
     if r.get("leak"):
