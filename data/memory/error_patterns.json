@@ -58,5 +58,17 @@
     "kind": "project",
     "desc": "update_post_route 函数中，若 update_post 返回 False（即未找到文章），应直接返回 404 错误，而不是继续执行后续代码",
     "fix": "在调用 update_post 后立即检查返回值，若为 False 则抛出 404 错误"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "general",
+    "desc": "测试用例中未覆盖负数情况，例如 nums = [-1, -2], target = -3",
+    "fix": "添加测试用例以覆盖负数情况"
+  },
+  {
+    "date": "2026-10-07",
+    "kind": "general",
+    "desc": "未处理输入参数为 None 或非列表类型的情况，可能导致运行时错误",
+    "fix": "在函数开始处添加参数类型检查，例如 if not isinstance(nums, list): raise TypeError(\"nums must be a list\")"
   }
 ]

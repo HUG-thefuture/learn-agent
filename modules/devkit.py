@@ -121,37 +121,37 @@ class Item(BaseModel):
     value: int
 
 
-DB = {{}}  # 演示用内存存储；生产请换 SQLite/SQLAlchemy
+DB = {}  # 演示用内存存储；生产请换 SQLite/SQLAlchemy
 
 
 @app.get("/api/health")
 def health():
-    return {{"status": "ok"}}
+    return {"status": "ok"}
 
 
 @app.get("/api/items")
 def list_items():
-    return [{{"id": k, **v}} for k, v in DB.items()]
+    return [{"id": k, **v} for k, v in DB.items()]
 
 
 @app.post("/api/items")
 def create_item(item: Item):
     item_id = str(len(DB) + 1)
     DB[item_id] = item.model_dump()
-    return {{"id": item_id}}
+    return {"id": item_id}
 
 
-@app.put("/api/items/{{item_id}}")
+@app.put("/api/items/{item_id}")
 def update_item(item_id: str, item: Item):
     if item_id not in DB:
         raise HTTPException(404, "not found")
     DB[item_id] = item.model_dump()
-    return {{"ok": True}}
+    return {"ok": True}
 
 
-@app.delete("/api/items/{{item_id}}")
+@app.delete("/api/items/{item_id}")
 def delete_item(item_id: str):
-    return {{"deleted": DB.pop(item_id, None) is not None}}
+    return {"deleted": DB.pop(item_id, None) is not None}
 
 
 if __name__ == "__main__":

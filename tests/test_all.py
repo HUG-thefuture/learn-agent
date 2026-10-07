@@ -214,6 +214,48 @@ class TestAlgo(unittest.TestCase):
         self.assertNotEqual(w["slug"], p["slug"], "已解决题目不应再次推荐")
 
 
+class TestLLMFallback(unittest.TestCase):
+    def test_external_disabled_falls_back(self):
+        """外部模型未启用时必须优雅跳过，不得抛未处理异常。"""
+        from core.llm import LLMError, LLMRouter
+        r = LLMRouter()
+        with self.assertRaises(LLMError):
+            r._external_chat([{"role": "user", "content": "x"}])
+        # 本地全挂 + 外部未启用 -> 所有通道失败应抛 LLMError 而非其他异常
+        orig = r._ollama_chat
+        try:
+            r._ollama_chat = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom"))
+            with self.assertRaises(LLMError):
+                r.chat([{"role": "user", "content": "x"}])
+        finally:
+            r._ollama_chat = orig
+
+    def test_chat_recovers_on_single_channel_failure(self):
+        """深度通道失败时应自动降级到快速通道。"""
+        from core.llm import LLMRouter
+        r = LLMRouter()
+        calls = []
+        def fake(model, messages, json_mode=False, think=False):
+            calls.append(model)
+            if "14b" in model:
+                raise RuntimeError("deep down")
+            return "ok"
+        orig = r._ollama_chat
+        try:
+            r._ollama_chat = fake
+            out = r.chat([{"role": "user", "content": "x"}], deep=True)
+            self.assertEqual(out, "ok")
+            self.assertEqual(len(calls), 2, "应依次尝试 deep->fast")
+        finally:
+            r._ollama_chat = orig
+
+
+class TestBankReferenceSanity(unittest.TestCase):
+    def test_bank_module_import(self):
+        from tests.test_bank_reference import REFERENCES, PROBLEMS  # noqa: F401
+        self.assertEqual(len(REFERENCES), len(PROBLEMS))
+
+
 class TestWorkflow(unittest.TestCase):
     def test_review_lang_filter(self):
         """非代码文件不应做语言级静态检查（曾误报 html/css 语法错误）。"""

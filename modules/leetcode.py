@@ -102,8 +102,8 @@ def _from_list(arr):
      "desc": "实现 LRUCache 类：get(key) 存在返回值否则-1；put(key,val) 容量满时淘汰最久未用。",
      "signature": "class LRUCache:  # __init__(self, capacity)",
      "class": True,
-     "tests": [((((2,), [("put", [1, 1]), ("put", [2, 2]), ("get", [1]), ("put", [3, 3]),
-                     ("get", [2]), ("put", [4, 4]), ("get", [1]), ("get", [3]), ("get", [4])]),),
+     "tests": [(((2, [("put", [1, 1]), ("put", [2, 2]), ("get", [1]), ("put", [3, 3]),
+                      ("get", [2]), ("put", [4, 4]), ("get", [1]), ("get", [3]), ("get", [4])]),),
                 [None, None, 1, None, -1, None, -1, 3, 4])],
      "wrap": "run_lru_ops"},
     {"slug": "longest-substring", "title": "3. 无重复字符的最长子串", "difficulty": "中等",
@@ -193,9 +193,16 @@ def check_solution(p, code: str) -> dict:
         call_args = ", ".join(repr(a) for a in args)
         wrap = p.get("wrap")
         if wrap == "run_lru_ops":
-            call = f"run_lru_ops({call_args})"
+            spec = args[0] if len(args) == 1 and isinstance(args[0], tuple) else args
+            call = f"run_lru_ops({repr(spec)})"
         elif wrap and wrap.startswith("lambda"):
-            call = f"({wrap})({', '.join(repr(a) for a in args[0])})"
+            inner = args[0]
+            if isinstance(inner, tuple):
+                # 多参数：逐个 repr（如链表题的两个列表）
+                call = f"({wrap})({', '.join(repr(a) for a in inner)})"
+            else:
+                # 单列表参数（如原地修改题）
+                call = f"({wrap})({repr(inner)})"
         else:
             call = f"{_fname(p)}({call_args})"
         harness = (code +
