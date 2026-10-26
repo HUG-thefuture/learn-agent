@@ -1,5 +1,9 @@
 # learn-agent — 编程学习与开发 Agent
 
+[![CI](https://github.com/HUG-thefuture/learn-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/HUG-thefuture/learn-agent/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+
 基于**本地大模型**（Ollama / Qwen3）+ **网络数据检索** + 可选**外部大模型 API 增强**的编程学习助手。
 
 核心能力：
@@ -10,10 +14,10 @@
 - **进阶实战（学以致用）**：`capstone` 让 Agent 用你已学的知识**自主完成**真实项目并走完整质量工作流——
   Python 个人博客系统(FastAPI+SQLite+前端)、JS 待办全栈应用(Express)、Java 成绩管理、C++ 日志分析器、
   Go 短链接服务、SQL 电商库表与报表、HTML/CSS 响应式个人主页
-- **刷算法**：内置 12 道力扣经典题（带可运行测试），解题走完整质量工作流并自动判题、查内存泄漏
+- **刷算法**：内置 20 道力扣经典题（带可运行测试），解题走完整质量工作流并自动判题、查内存泄漏
 - **做开发**：FastAPI / Flask / Express + 前端脚手架一键生成，生成即体检
 - **函数调用**：LLM function-calling 工具循环（联网搜索 / 运行代码 / 检索知识库 / 代码体检 / **MySQL 数据库操作**）
-- **本地数据库**：直连本机 MySQL/MariaDB（凭据在 `config.yaml` 的 `database` 段），CLI `db` 命令、GUI 数据库页签、
+- **本地数据库**：直连本机 MySQL/MariaDB（凭据在 `config.yaml` 的 `database` 段，见下方[配置说明](#快速开始)），CLI `db` 命令、GUI 数据库页签、
   AI 工具 `mysql_query`/`mysql_schema` 三种方式操作真实库
 - **质量工作流**：`思考 → 计划 → 审查 →（不过→回思考）→ 开发 → 代码审查 → 测试 →（不过→回思考）→ 完成`，最多 3 轮循环；连续失败自动升级模型（外部 API 或深度模型+思考模式）
 - **训练体系**：数据蒸馏 → 知识库 TF-IDF 训练（带命中率指标）→ 定制本地模型 `learn-agent`（`ollama create`）→ 可选真·LoRA 微调脚本（RTX 4070 可跑）
@@ -23,7 +27,7 @@
 ```
 D:\learn-agent\
 ├── main.py                 # CLI 入口（chat/learn/quiz/solve/task/dev/ask/tools/kb/train/serve）
-├── config.yaml             # 模型、工作流、测试参数；外部 API Key 填这里
+├── config.example.yaml     # 配置模板（入库）；复制为 config.yaml 填本机凭据（不入库）
 ├── core/
 │   ├── llm.py              # LLM 路由：本地 qwen3:8b/14b + 外部 OpenAI 兼容接口 + 自动降级
 │   ├── workflow.py         # 思考→计划→审查→开发→测试 状态机（全程落盘可追溯）
@@ -41,13 +45,22 @@ D:\learn-agent\
 │   ├── finetune_lora.py    # 可选：QLoRA 真微调（需另装 torch/peft，见文件头注释）
 │   └── run_training.py     # 一键训练
 ├── webapp/                 # Web 控制台（Flask + 原生前端）
-├── gui/app.py              # 桌面图形应用（Tkinter 深色主题，五页签）
+├── gui/app.py              # 桌面图形应用（Tkinter 深色主题，六页签）
 ├── learn-agent-gui.bat     # 桌面应用双击启动器
 ├── tests/test_all.py       # 单元测试 + 集成测试
 └── data/                   # knowledge(索引) datasets(蒸馏语料) outputs(任务产物)
 ```
 
 ## 快速开始
+
+```bash
+:: ① 安装依赖
+pip install -r requirements.txt
+
+:: ② 生成并填写本机配置（数据库密码等；不创建也能跑，程序自动用模板默认值）
+copy config.example.yaml config.yaml
+```
+
 
 **桌面软件（推荐）**：双击桌面上的 **learn-agent** 图标（安装见下），或双击项目里的 `learn-agent.exe`。
 单文件 exe，自带运行时，启动后自动预加载 `learn-agent` 模型（对话零冷启动）。
@@ -114,7 +127,7 @@ python main.py serve        # http://127.0.0.1:7860
 
 ## 启用外部大模型增强
 
-编辑 `config.yaml`：
+编辑 `config.yaml`（本地文件，不会入库）：
 
 ```yaml
 external_model:
@@ -130,12 +143,25 @@ external_model:
 
 | 入口 | 说明 |
 |---|---|
-| `python main.py gui`（或双击 `learn-agent-gui.bat`） | **桌面应用**（Tkinter，零额外依赖）：对话（流式输出）/ 语言学习 / 力扣刷题（选题解题+判题）/ 开发任务（实时工作流日志）/ 训练（含报告展示） |
-| `python main.py serve` → http://127.0.0.1:7860 | **浏览器控制台**（Flask）：同样的五大功能 |
+| `python main.py gui`（或双击 `learn-agent-gui.bat`） | **桌面应用**（Tkinter，零额外依赖）：对话（流式输出）/ 语言学习 / 力扣刷题（选题解题+判题）/ 开发任务（实时工作流日志）/ 数据库（SQL 控制台）/ 训练（含报告展示） |
+| `python main.py serve` → http://127.0.0.1:7860 | **浏览器控制台**（Flask）：同样的六大功能 |
 
 两者均后台线程执行耗时操作，界面不卡顿；桌面版流式对话逐字显示。
 
 ## 工作流说明
+
+```mermaid
+flowchart LR
+    A[思考 Think] --> B[计划 Plan]
+    B --> C{计划审查}
+    C -- "high 问题" --> A
+    C -- 通过 --> D[开发 Develop]
+    D --> E{代码审查<br/>静态+LLM 双保险}
+    E -- "high 问题" --> A
+    E -- 通过 --> F[测试<br/>子进程超时+内存泄漏检测]
+    F -- 失败 --> A
+    F -- 通过 --> G[完成<br/>全程落盘+复盘归档]
+```
 
 每个任务在 `data/outputs/<kind>/<task_id>/` 留下完整过程：
 `roundN_1_think.md → roundN_2_plan.json → roundN_3_plan_review.json → code/ → roundN_5_code_review.json → roundN_6_test_report.json → summary.md`
@@ -159,11 +185,32 @@ external_model:
 ## 测试
 
 ```bash
-python -m unittest discover tests -v     # 单元测试（无需大模型在线）
+python -m unittest discover tests -v     # 单元测试 + 集成测试
+
+:: 端到端集成测试（真跑 LLM 工作流，约数分钟）默认跳过以保证回归确定性；
+:: 需 Ollama 在线并显式开启时运行：
+set LEARN_AGENT_E2E=1 && python -m unittest tests.test_all.IntegrationLLM -v
 ```
+
+单元测试不依赖任何外部服务（无 Ollama/MySQL 时相关用例自动跳过），CI 全绿即回归通过。
+经验沉淀：`data/memory/error_patterns.json` 记录历次工作流踩过的真实缺陷模式——
+例如"自动生成的测试脚手架期望值算错导致正确解法被误判"，已反哺到测试驱动修复的判定指引中。
 
 ## 环境要求
 
-- Python 3.11+，`pip install requests flask pyyaml`
+- Python 3.11+，`pip install -r requirements.txt`
 - Ollama + `qwen3:8b` / `qwen3:14b`（NVIDIA GPU 建议 ≥12GB 显存）
-- 可选：Node.js（JS 语法检查）、外部 LLM API Key（增强）
+- 可选：Node.js（JS 语法检查）、MySQL/MariaDB（数据库工具）、外部 LLM API Key（增强）
+
+## 路线图
+
+- [ ] **MCP Server 模式**：把质量工作流（判题/体检/知识库检索）以 [Model Context Protocol](https://modelcontextprotocol.io) 工具暴露给任意 MCP 客户端复用
+- [ ] 多语言课程动态生成的质量评估基准（现有 7 门内置详纲 → 35 门动态生成）
+- [ ] LoRA 微调模型与基座模型的 A/B 评测报告自动化
+- [ ] Web 控制台流式输出与移动端适配
+
+## 安全说明
+
+本仓库不含任何真实凭据：`config.yaml`（数据库密码/API Key）已被 `.gitignore` 忽略，
+仓库只保留脱敏模板 `config.example.yaml`；程序在 `config.yaml` 缺失时自动回退读取模板，开箱可运行。
+

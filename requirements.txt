@@ -1,0 +1,6 @@
+# learn-agent 运行依赖（Python 3.11+）
+# 安装：pip install -r requirements.txt
+requests>=2.31      # LLM 调用 / 网络检索 / Ollama 探活
+flask>=3.0          # Web 控制台（python main.py serve）
+PyYAML>=6.0         # config.yaml 解析
+PyMySQL>=1.1        # MySQL/MariaDB 接入（core/db.py、mysql_query 工具）
