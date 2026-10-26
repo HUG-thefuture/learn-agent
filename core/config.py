@@ -16,10 +16,15 @@ _CFG = None
 
 
 def load_config(path: str = None) -> dict:
-    """读取 config.yaml 并缓存。"""
+    """读取 config.yaml 并缓存；缺失时回退到 config.example.yaml（开箱可运行）。"""
     global _CFG
     if _CFG is None:
-        p = Path(path) if path else ROOT / "config.yaml"
+        if path:
+            p = Path(path)
+        else:
+            p = ROOT / "config.yaml"
+            if not p.exists():
+                p = ROOT / "config.example.yaml"
         with open(p, "r", encoding="utf-8") as f:
             _CFG = yaml.safe_load(f) or {}
         _CFG["_root"] = str(ROOT)
