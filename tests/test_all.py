@@ -4,6 +4,7 @@
 运行: python -m unittest discover tests -v
 """
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -303,7 +304,9 @@ class TestLearningV2(unittest.TestCase):
         self.assertTrue(set(_topics("python", 100)).issubset(set(_flatten(CURRICULUM["python"]))))
 
 
-@unittest.skipUnless(ollama_up(), "Ollama 未运行，跳过集成测试")
+@unittest.skipUnless(
+    os.environ.get("LEARN_AGENT_E2E") == "1" and ollama_up(),
+    "集成测试需 LEARN_AGENT_E2E=1 且 Ollama 在线（默认跳过，保证回归确定性）")
 class IntegrationLLM(unittest.TestCase):
     def test_router_ask(self):
         from core.llm import router

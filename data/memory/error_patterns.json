@@ -70,5 +70,17 @@
     "kind": "general",
     "desc": "未处理输入参数为 None 或非列表类型的情况，可能导致运行时错误",
     "fix": "在函数开始处添加参数类型检查，例如 if not isinstance(nums, list): raise TypeError(\"nums must be a list\")"
+  },
+  {
+    "date": "2026-10-27",
+    "kind": "workflow",
+    "desc": "自动生成的测试脚手架期望值可能算错（如 two-sum 对 nums=[-1,-2,-3], target=-5 期望 [0,2]，正确应为 [1,2]），导致正确的解法被判失败且循环不收敛",
+    "fix": "断言失败时先核对 expected 与题目语义：矛盾则修脚手架而不是解法；工作流的测试驱动修复与轮间反馈均需携带该判定指引"
+  },
+  {
+    "date": "2026-10-27",
+    "kind": "general",
+    "desc": "测试用例中未覆盖所有边界条件，例如 nums 为单个元素的情况",
+    "fix": "添加测试用例，如 ([1], 2, [])"
   }
 ]

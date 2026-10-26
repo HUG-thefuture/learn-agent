@@ -420,7 +420,9 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                 # 测试驱动修复：用确切 traceback 精准再修一轮
                 test_issues = [{"severity": "high",
                                 "desc": f"[测试失败:{r['file']}] {(r.get('error') or r.get('output') or '')[:450]}",
-                                "fix": "按报错修复该文件（常见：缺 import/名称拼写/库版本API不匹配）"}
+                                "fix": "按报错修复。先核对断言的期望值是否与题目语义一致："
+                                       "若测试脚手架的 expected 本身算错，修脚手架而不是解法；"
+                                       "若解法确实有错再修实现（常见：缺 import/名称拼写/边界条件）"}
                                for r in tr["runs"] if not r["ok"]]
                 self.log(f">>> 测试驱动修复 {len(test_issues)} 个失败文件（带确切报错）")
                 return self.hotfix(test_issues, _repaired=_repaired + 1)
@@ -454,6 +456,8 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
         feedback = ""
         fail_streak = 0
         last_review_issues = []
+        last_test_bad = None
+        test_fail_streak = 0
         for rnd in range(1, self.max_rounds + 1):
             self.log(f"===== 第 {rnd}/{self.max_rounds} 轮 =====")
             # 质量门连续失败 -> 本轮强制外部模型（若已配置）
@@ -481,11 +485,23 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                     bad = [f"{e['file']}: {e['error'] or e['output'][:200]}" for e in tr["runs"] if not e["ok"]]
                     bad += [f"泄漏[{l['file']}.{l['func']}]: {l['detail']}" for l in tr["leaks"] if l["leaky"]]
                     feedback = "上一轮【测试】未通过：\n- " + "\n- ".join(bad) + \
-                               "\n请重新思考、修正计划与实现。"
+                               "\n请重新思考、修正计划与实现。" \
+                               "注意：先核对失败断言的期望值本身是否与题目语义一致——" \
+                               "若测试脚手架的 expected 算错了，应修正脚手架而不是实现。"
+                    repeated = last_test_bad is not None and bool(set(bad) & set(last_test_bad))
+                    test_fail_streak += 1
+                    if repeated or test_fail_streak >= 2:
+                        feedback += ("\n【重要】同样的测试失败已连续出现，而实现已重新生成过——"
+                                     "基本可断定是测试脚手架的期望值算错。请用朴素暴力法独立重算"
+                                     "该用例的正确答案并修正脚手架的 expected；"
+                                     "严禁为迁就错误的期望值改坏与题目语义一致的实现。")
+                    last_test_bad = bad
                     fail_streak += 1
                     continue
                 # 全部通过
                 self.r.ok()
+                last_test_bad = None
+                test_fail_streak = 0
                 summary = (f"任务完成（第{rnd}轮通过）：{plan.get('summary', '')}\n"
                            f"文件: {', '.join(files.keys())}\n"
                            f"验收: {plan.get('acceptance', '-')}")
