@@ -1085,6 +1085,106 @@ class TestKbContextInjection(unittest.TestCase):
         self.assertEqual(r._kb_context(""), "")
 
 
+class TestLayoutMultiPanel(unittest.TestCase):
+    """多开页签 + 学习页边学边练（需求：练习时能同时看着学习内容）。
+
+    纯前端特性，这里做静态断言守住关键结构，行为细节由
+    tests/layout_multi_check.js 覆盖。
+    """
+
+    def _html(self):
+        from pathlib import Path
+        return (Path(__file__).resolve().parent.parent
+                / "webapp" / "templates" / "index.html").read_text(encoding="utf-8")
+
+    def test_multi_mode_toggle_exists(self):
+        """有「多开模式」开关与网格布局，且支持把多个页签同时点亮。"""
+        html = self._html()
+        for key in ("id=\"multi-mode\"", "body.multi main", "toggleMultiMode",
+                    "isMultiMode", "syncMultiGrid"):
+            self.assertIn(key, html, f"缺少多开支持: {key}")
+        # 多开时点击页签是 toggle（并存），不是一律清空
+        i = html.find("document.querySelectorAll('nav button').forEach(b => b.onclick")
+        j = html.find("function toggleMultiMode")
+        self.assertIn("classList.toggle", html[i:j],
+                      "多开时点击页签应 toggle 而不是独占")
+
+    def test_multi_mode_never_leaves_zero_panels(self):
+        """至少保留一栏可见，避免用户把所有页签都关掉后白屏。"""
+        html = self._html()
+        self.assertIn("至少保留一个可见", html)
+
+    def test_single_panel_fills_width(self):
+        """多开但只点亮一栏时，不能只占半宽。"""
+        html = self._html()
+        self.assertIn("single-panel", html)
+        self.assertIn("grid-template-columns:minmax(0,1fr)", html)
+
+    def test_split_workbench_structure(self):
+        """学习页有左右两栏 + 可拖拽分隔条，单栏时用 display:contents 保持不变。"""
+        html = self._html()
+        for key in ("id=\"learn-main\"", "wb-left", "wb-right",
+                    "id=\"wb-resizer\"", "toggleSplitWorkbench", "display:contents"):
+            self.assertIn(key, html, f"缺少双栏结构: {key}")
+        self.assertIn(".learn-main.split", html, "双栏应切换为 grid 布局")
+        self.assertIn("position:sticky", html, "右栏应 sticky 常驻")
+
+    def test_split_keeps_tutorial_visible(self):
+        """关键回归：双栏时练习相关函数不能把左栏教程隐藏掉，否则左半屏空白。
+
+        实现方式是各函数里按 split 状态跳过对 #learn-course-view 的隐藏。
+        """
+        html = self._html()
+        for fn in ("async function showPracticeList",
+                   "async function showTopicPractices",
+                   "async function openCourseFromToc"):
+            i = html.find(fn)
+            self.assertGreater(i, 0, f"找不到 {fn}")
+            seg = html[i:i + 1600]
+            self.assertIn("split", seg,
+                          f"{fn} 未感知双栏模式，可能误隐藏另一栏内容")
+
+    def test_one_click_open_topic_both(self):
+        """课程目录的 ⇔ 按钮能一键在左右栏同时打开教程与练习。"""
+        html = self._html()
+        self.assertIn("openTopicBoth", html)
+        i = html.find("async function openTopicBoth")
+        j = html.find("async function openExtraCourse")
+        seg = html[i:j]
+        self.assertIn("toggleSplitWorkbench", seg)
+        self.assertIn("openCourseFromToc", seg)
+        self.assertIn("showTopicPractices", seg)
+
+    def test_layout_persisted(self):
+        """多开 / 双栏状态记在 localStorage，刷新后恢复。"""
+        html = self._html()
+        self.assertIn("la-multi-mode", html)
+        self.assertIn("la-learn-split", html)
+        self.assertIn("restoreLayoutPrefs", html)
+
+    def test_deep_link_params(self):
+        """支持 URL 深链：?multi/panels/split/lang/topic，便于收藏与分享视图。"""
+        html = self._html()
+        for key in ("get('multi')", "get('split')", "get('panels')",
+                    "get('lang')", "get('topic')"):
+            self.assertIn(key, html, f"缺少 URL 参数支持: {key}")
+
+    def test_default_language_is_python(self):
+        """默认语言应是 Python，而不是按字典序排第一的 c++。"""
+        html = self._html()
+        self.assertIn("ls.value = 'python'", html)
+
+    def test_restore_runs_before_course_toc(self):
+        """布局/语言恢复必须早于课程目录拉取，否则目录会用错语言。"""
+        html = self._html()
+        i_restore = html.find("restoreLayoutPrefs();")
+        i_toc = html.find("loadCourseToc(); // 侧边栏课程目录")
+        self.assertGreater(i_restore, 0)
+        self.assertGreater(i_toc, 0)
+        self.assertLess(i_restore, i_toc,
+                        "restoreLayoutPrefs 应先于 loadCourseToc 执行")
+
+
 class TestWebPracticeHistory(unittest.TestCase):
     """历史练习查看（回归：练习只存内存 JOBS，服务重启后 UI 里彻底看不到）。"""
 

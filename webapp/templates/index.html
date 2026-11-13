@@ -100,6 +100,57 @@
   .prac-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:5px 0 5px 10px; }
   .prac-row .stat { margin:0; }
   @media (max-width: 900px) { .learn-layout { flex-direction:column; } .learn-toc { width:100%; flex:none; position:static; max-height:300px; } }
+
+  /* ====== 多开模式：多个页签同时显示 ====== */
+  #multi-toggle { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--dim);
+    background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:6px 11px;
+    cursor:pointer; user-select:none; }
+  #multi-toggle.on { border-color:var(--acc); color:#bcdcff; }
+  #multi-toggle input { accent-color:var(--acc); width:14px; }
+  body.multi main { display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:14px; align-items:start; max-width:1800px; }
+  /* 多开模式只点亮一栏时，让它占满整行（否则半宽很浪费） */
+  body.multi main.single-panel { grid-template-columns:minmax(0,1fr); }
+  /* 三栏及以上时让第一栏跨两列，避免最后一格空着 */
+  body.multi main.three-panels > .panel.active:nth-child(1) { grid-column:1 / -1; }
+  body.multi .panel { min-height:0; }
+  body.multi .panel.active { display:block; }
+  body.multi nav button.active { border-color:var(--acc); box-shadow:inset 0 -2px 0 var(--acc); }
+  /* 多开时窄列里的侧栏收窄，避免挤爆 */
+  body.multi .learn-toc { width:190px; flex-basis:190px; }
+  body.multi .lc-toc { width:190px; flex-basis:190px; }
+  @media (max-width:1100px) { body.multi main { grid-template-columns:1fr; } }
+
+  /* ====== 学习页双栏工作台：教程(左) + 练习(右) 同时可见 ====== */
+  /* 单栏时 wrapper 用 display:contents 让子元素直接参与原布局 → 外观零变化 */
+  .learn-main:not(.split) > .wb-left,
+  .learn-main:not(.split) > .wb-right { display:contents; }
+  .learn-main:not(.split) > .wb-resizer { display:none; }
+  .learn-main.split { display:grid;
+    grid-template-columns: minmax(0, var(--wb-left, 50%)) 7px minmax(0, 1fr);
+    gap:10px; align-items:start; }
+  .learn-main.split > .wb-left, .learn-main.split > .wb-right { min-width:0; }
+  .learn-main.split > .wb-right { position:sticky; top:12px;
+    max-height:calc(100vh - 150px); overflow-y:auto; padding-right:2px; }
+  .wb-resizer { cursor:col-resize; background:var(--line); border-radius:4px;
+    align-self:stretch; min-height:240px; }
+  .wb-resizer:hover, .wb-resizer.dragging { background:var(--acc); }
+  .wb-col-head { display:flex; align-items:center; justify-content:space-between;
+    font-size:12px; color:var(--dim); border-bottom:1px dashed var(--line);
+    padding:2px 4px 6px; margin-bottom:8px; }
+  .learn-main:not(.split) .wb-col-head { display:none; }
+  .wb-hint { color:var(--dim); font-size:13px; padding:14px; border:1px dashed var(--line);
+    border-radius:8px; text-align:center; }
+  /* 单栏时 wb-right 是 display:contents，提示条应占满整行（不能缩成半宽） */
+  .learn-main:not(.split) #wb-prac-hint { text-align:left; }
+  .learn-toc-item .wb-btn { color:var(--acc); cursor:pointer; padding:0 3px; border-radius:4px; }
+  .learn-toc-item .wb-btn:hover { background:#2a3450; }
+  #split-btn.on { background:var(--ok); color:#06251a; }
+  @media (max-width: 900px) {
+    .learn-main.split { grid-template-columns:1fr; }
+    .learn-main.split > .wb-right { position:static; max-height:none; }
+    .wb-resizer { display:none; }
+  }
 </style>
 </head>
 <body>
@@ -108,6 +159,9 @@
   <span class="meta" id="status">加载中…</span>
   <label class="cloud-toggle" id="cloud-toggle" title="开启后：所有任务先走云端大模型（按难度自动选 strong/fast 档），本地 Ollama 作兜底。关闭则本地优先、本地超时降级到云端。">
     <input type="checkbox" id="cloud-first" onchange="toggleCloudFirst()"> ☁ 云端优先
+  </label>
+  <label id="multi-toggle" title="多开：所有选中的页签同时显示（默认单页签，点亮的页签才会显示）">
+    <input type="checkbox" id="multi-mode" onchange="toggleMultiMode()"> ⊞ 多开模式
   </label>
   <span class="meta" id="cloud-info"></span>
 </header>
@@ -152,6 +206,8 @@
       <button class="go" onclick="runPractice(false)">🎯 练习</button>
       <button class="go" onclick="runPractice(true)">🔁 再练薄弱</button>
       <button class="go" style="background:#2a3450;" onclick="showPracticeList()">📋 历史练习</button>
+      <button class="go" style="background:#2a3450;" id="split-btn"
+              onclick="toggleSplitWorkbench()" title="教程与练习并排显示，边看边做">⇔ 边学边练</button>
       <button class="go" onclick="runReview()">🧠 智能复习</button>
       <button class="go" style="background:#2a3450;" onclick="showHistory()">📚 回顾已学内容</button>
       <button class="go" style="background:#2a3450;" onclick="goHome()">🏠 返回首页</button>
@@ -169,13 +225,23 @@
                style="width:100%;margin:6px 0;padding:6px 9px;font-size:13px;">
         <div id="learn-toc-list" class="learn-toc-list"><span class="stat">加载中…</span></div>
       </aside>
-      <!-- 右侧主区 -->
-      <div class="learn-main">
-        <div id="learn-path" style="display:none; margin-top:10px;"></div>
-        <div id="learn-history" style="display:none; margin-top:10px;"></div>
-        <div id="learn-practices" style="display:none; margin-top:10px;"></div>
-        <div id="learn-course-view" style="display:none; margin-top:10px;"></div>
-        <div id="learn-jobs"></div>
+      <!-- 右侧主区：双栏工作台（单栏时 wrapper 用 display:contents，外观不变） -->
+      <div class="learn-main" id="learn-main">
+        <!-- 左栏：教程/课程/路径/回顾 -->
+        <div class="wb-left">
+          <div class="wb-col-head"><span>📖 学习资料</span><span>拖动右侧分隔条可调宽度</span></div>
+          <div id="learn-path" style="display:none; margin-top:10px;"></div>
+          <div id="learn-history" style="display:none; margin-top:10px;"></div>
+          <div id="learn-course-view" style="display:none; margin-top:10px;"></div>
+          <div id="learn-jobs"></div>
+        </div>
+        <div class="wb-resizer" id="wb-resizer" title="拖动调整左右宽度"></div>
+        <!-- 右栏：练习（边看边做，独立滚动、sticky 常驻） -->
+        <div class="wb-right">
+          <div class="wb-col-head"><span>🎯 练习区</span><span>独立滚动，边看边做</span></div>
+          <div id="learn-practices" style="display:none; margin-top:10px;"></div>
+          <div id="wb-prac-hint" class="wb-hint">点左侧课程目录里的 🎯 标记，或「📋 历史练习」，练习会显示在这一栏。开启「⇔ 边学边练」即可左右对照。</div>
+        </div>
       </div>
     </div>
   </section>
@@ -263,16 +329,179 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 
-// Tab 切换
+// Tab 切换（单开：同时只显示一个页签；多开：点亮的页签全部并排显示）
+function isMultiMode() {
+  const cb = $('#multi-mode');
+  return !!(cb && cb.checked);
+}
+// 多开时按实际显示的栏数调整网格（1 栏占满 / 2 栏并排 / 3 栏首位跨行）
+function syncMultiGrid() {
+  const main = document.querySelector('main');
+  if (!main) return;
+  const n = document.querySelectorAll('main > .panel.active').length;
+  main.classList.toggle('single-panel', isMultiMode() && n <= 1);
+  main.classList.toggle('three-panels', isMultiMode() && n >= 3);
+}
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
-  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
-  b.classList.add('active'); $('#p-' + b.dataset.p).classList.add('active');
-});
-function goHome() { // 返回首页（对话页）：符合用户"逛完回来"的习惯
-  const home = document.querySelector('nav button[data-p="chat"]');
-  if (home) home.click();
+  const multi = isMultiMode();
+  if (!multi) {
+    // 单开：切换为独占显示
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    $('#p-' + b.dataset.p).classList.add('active');
+  } else {
+    // 多开：切换该页签的显示/隐藏，其它页签保持不动
+    const on = b.classList.toggle('active');
+    $('#p-' + b.dataset.p).classList.toggle('active', on);
+    // 至少保留一个可见
+    if (!document.querySelector('nav button.active')) {
+      b.classList.add('active');
+      $('#p-' + b.dataset.p).classList.add('active');
+    }
+  }
+  syncMultiGrid();
   window.scrollTo({ top: 0, behavior: 'auto' });
+});
+function toggleMultiMode() {
+  const multi = isMultiMode();
+  document.body.classList.toggle('multi', multi);
+  const label = $('#multi-toggle');
+  if (label) label.classList.toggle('on', multi);
+  localStorage.setItem('la-multi-mode', multi ? '1' : '0');
+  if (multi) {
+    // 进入多开：当前激活的页签保留，其余标记为未选（初始只有一栏，用户自行点亮别的）
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    const cur = document.querySelector('nav button.active')
+      || document.querySelector('nav button[data-p="chat"]');
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    if (cur) {
+      cur.classList.add('active');
+      $('#p-' + cur.dataset.p).classList.add('active');
+    }
+  } else {
+    // 退回单开：只留第一个激活的页签
+    const first = document.querySelector('nav button.active')
+      || document.querySelector('nav button[data-p="chat"]');
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    if (first) {
+      first.classList.add('active');
+      $('#p-' + first.dataset.p).classList.add('active');
+    }
+  }
+  syncMultiGrid();
+}
+// 打开指定页签（多开模式下会追加显示，不清掉其它）
+function openPanel(name, exclusive) {
+  const b = document.querySelector(`nav button[data-p="${name}"]`);
+  if (!b) return;
+  if (exclusive || !isMultiMode()) {
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+  }
+  b.classList.add('active');
+  $('#p-' + name).classList.add('active');
+  syncMultiGrid();
+}
+function goHome() { // 返回首页（对话页）：符合用户"逛完回来"的习惯
+  openPanel('chat', !isMultiMode());
+  window.scrollTo({ top: 0, behavior: 'auto' });
+}
+
+// ====== 学习页双栏工作台：教程(左) + 练习(右) 并排，边看边做 ======
+function toggleSplitWorkbench() {
+  const main = $('#learn-main');
+  if (!main) return;
+  const on = !main.classList.contains('split');
+  main.classList.toggle('split', on);
+  const btn = $('#split-btn');
+  if (btn) {
+    btn.classList.toggle('on', on);
+    btn.textContent = on ? '⇔ 退出边学边练' : '⇔ 边学边练';
+  }
+  localStorage.setItem('la-learn-split', on ? '1' : '0');
+  // 开启时把练习区提示清掉（如果有内容则保留），并滚到工作台顶部
+  const hint = $('#wb-prac-hint');
+  const prac = $('#learn-practices');
+  if (hint && prac && prac.style.display !== 'none') hint.style.display = 'none';
+  if (on) main.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// 分隔条拖拽调宽
+(function initResizer() {
+  const resizer = $('#wb-resizer');
+  const main = $('#learn-main');
+  if (!resizer || !main) return;
+  let dragging = false;
+  function onMove(e) {
+    if (!dragging) return;
+    const rect = main.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const pct = Math.max(20, Math.min(80, (x / rect.width) * 100));
+    main.style.setProperty('--wb-left', pct + '%');
+  }
+  function stop() {
+    dragging = false;
+    resizer.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.documentElement.style.userSelect = '';
+  }
+  resizer.addEventListener('mousedown', e => {
+    dragging = true; e.preventDefault();
+    resizer.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.documentElement.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', stop);
+  // 触屏
+  resizer.addEventListener('touchstart', e => {
+    dragging = true; resizer.classList.add('dragging');
+  }, { passive: true });
+  document.addEventListener('touchmove', onMove, { passive: true });
+  document.addEventListener('touchend', stop);
+})();
+// 恢复上次的多开 / 边学边练状态
+function restoreLayoutPrefs() {
+  // URL 参数优先于本地记忆，便于分享/收藏特定视图：
+  //   ?multi=1&panels=learn,lc  多开并显示这两栏
+  //   ?split=1                  学习页开启边学边练
+  //   ?topic=装饰器&lang=python  直接打开该课与对应练习
+  const p = new URLSearchParams(location.search);
+  const urlMulti = p.get('multi');
+  const urlSplit = p.get('split');
+  if (urlMulti === '1' || (urlMulti === null && localStorage.getItem('la-multi-mode') === '1')) {
+    const cb = $('#multi-mode');
+    if (cb) { cb.checked = true; toggleMultiMode(); }
+  }
+  if (urlSplit === '1'
+      || (urlSplit === null && localStorage.getItem('la-learn-split') === '1')) {
+    const main = $('#learn-main');
+    if (main && !main.classList.contains('split')) toggleSplitWorkbench();
+  }
+  const panels = (p.get('panels') || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (panels.length && isMultiMode()) {
+    document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    panels.forEach(name => {
+      const b = document.querySelector(`nav button[data-p="${name}"]`);
+      if (b) {
+        b.classList.add('active');
+        $('#p-' + name).classList.add('active');
+      }
+    });
+    syncMultiGrid();
+  }
+  // URL 指定语言 → 切换下拉框并刷新课程目录
+  const urlLang = p.get('lang');
+  if (urlLang) {
+    const sel = $('#learn-lang');
+    if (sel) {
+      const has = [...sel.options].some(o => o.value === urlLang);
+      if (!has) sel.add(new Option(urlLang, urlLang));
+      sel.value = urlLang;
+    }
+  }
 }
 
 async function init() {
@@ -302,9 +531,15 @@ async function init() {
   }
   const ls = $('#learn-lang');
   const BUILTIN_LANGS = ['python', 'javascript', 'java', 'c++', 'go', 'sql', 'html-css'];
-  (st && st.curriculum ? Object.keys(st.curriculum) : BUILTIN_LANGS)
-    .forEach(k => ls.add(new Option(k, k)));
-  loadCourseToc(); // 侧边栏课程目录
+  // 下拉框排序：常用语言在前，其余按字母序在后（否则默认选中 c++，不符合直觉）
+  const all = st && st.curriculum ? Object.keys(st.curriculum) : BUILTIN_LANGS.slice();
+  const ordered = BUILTIN_LANGS.filter(k => all.includes(k))
+    .concat(all.filter(k => !BUILTIN_LANGS.includes(k)).sort());
+  ordered.forEach(k => ls.add(new Option(k, k)));
+  ls.value = 'python';   // 默认 Python（而非按字典序的 c++）
+  // 先恢复布局偏好（含 URL 指定的语言），再拉课程目录 → 目录语言正确
+  restoreLayoutPrefs();
+  await loadCourseToc(); // 侧边栏课程目录
   try {
     const probs = await (await fetch('/api/problems')).json();
     $('#lc-list').innerHTML = '<table><tr><th>slug</th><th>题目</th><th>难度</th><th></th></tr>' +
@@ -316,6 +551,14 @@ async function init() {
     $('#lc-list').innerHTML = '<p class="stat">题库加载失败，请稍后刷新页面</p>';
   }
   loadExplainToc(); // 侧边栏讲解目录
+  // URL 指定了主题 → 自动打开该课的「边学边练」
+  const _ps = new URLSearchParams(location.search);
+  const _topic = _ps.get('topic');
+  if (_topic) {
+    const _lang = _ps.get('lang') || ($('#learn-lang')?.value || 'python');
+    openPanel('learn', !isMultiMode());
+    setTimeout(() => { openTopicBoth(_lang, _topic).catch(() => {}); }, 300);
+  }
   // 代码框 Tab 键缩进（而非跳焦）
   $('#lc-code').addEventListener('keydown', e => {
     if (e.key === 'Tab') {
@@ -643,12 +886,17 @@ function renderCourseToc() {
         ? `<span class="nf prac-badge" title="${prac.count} 套已保存练习（${esc(prac.latest)}），点这里直接做"`
           + ` onclick="event.stopPropagation();showTopicPractices('${esc(i.topic.replace(/'/g, "\\'"))}')">🎯${prac.count}</span>`
         : '';
+      // 「边学边练」快捷按钮：一次把教程放左栏、练习放右栏
+      const wbBtn = prac
+        ? `<span class="nf wb-btn" title="边学边练：教程与练习并排打开"`
+          + ` onclick="event.stopPropagation();openTopicBoth('${esc(d.lang)}','${esc(i.topic.replace(/'/g, "\\'"))}')">⇔</span>`
+        : '';
       html += `<div class="learn-toc-item ${cls}" data-topic="${esc(i.topic)}" `
             + `title="${esc(i.topic)}${hasFile ? ' · ' + esc(i.mtime) : ' · 尚未生成教程'}" `
             + `onclick="openCourseFromToc('${esc(d.lang)}','${esc(i.topic.replace(/'/g, "\\'"))}')">`
             + `<span class="dot ${i.learned ? '' : 'no'}">${i.learned ? '✓' : '○'}</span>`
             + `<span class="t">${esc(i.topic)}</span>`
-            + pracBadge
+            + pracBadge + wbBtn
             + (hasFile ? '' : '<span class="nf">未生成</span>')
             + `</div>`;
     });
@@ -666,11 +914,13 @@ function renderCourseToc() {
   }
   box.innerHTML = html || '<span class="stat">没有匹配的课程</span>';
 }
-// 点目录里的练习标记：跳到该主题的练习列表并自动展开
+// 点目录里的练习标记：把练习载入练习区
+// 注意：双栏（边学边练）模式下**不能**隐藏左栏的教程，否则"边学边练"的左半屏会被清空。
 async function showTopicPractices(topic) {
+  const split = $('#learn-main')?.classList.contains('split');
   $('#learn-path').style.display = 'none';
   $('#learn-history').style.display = 'none';
-  $('#learn-course-view').style.display = 'none';
+  if (!split) $('#learn-course-view').style.display = 'none';
   const box = $('#learn-practices');
   box.style.display = '';
   await showPracticeList(true);
@@ -678,7 +928,13 @@ async function showTopicPractices(topic) {
   const d = await (await fetch('/api/practices?lang=' + encodeURIComponent($('#learn-lang').value))).json();
   const hit = (d.items || []).find(i => (i.topic || '').includes(topic));
   if (hit) { await openSavedPractice(hit.file); }
-  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // 双栏工作台里右栏自己会滚动，不必整页跳
+  const hint = $('#wb-prac-hint');
+  if (split) {
+    if (hint) hint.style.display = 'none';
+  } else {
+    box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 let _courseTopic = null;
@@ -692,8 +948,11 @@ async function openCourseFromToc(lang, topic) {
     if (i.topic === topic && i.has_file) file = i.file;
   }));
   const view = $('#learn-course-view');
+  const split = $('#learn-main')?.classList.contains('split');
   $('#learn-path').style.display = 'none';
   $('#learn-history').style.display = 'none';
+  // 双栏时右栏是练习区，这里只动左栏 → 不隐藏练习区
+  if (!split) $('#learn-practices').style.display = 'none';
   view.style.display = '';
   if (file) {
     const r = await (await fetch('/api/history?file=' + encodeURIComponent(
@@ -714,18 +973,25 @@ async function openCourseFromToc(lang, topic) {
       + `'${esc(topic.replace(/'/g, "\\'"))}')">重新生成这一课</button></div>`);
     tutorialHtml(card, r.content, 'python');
     view.appendChild(card);
-    view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!split) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
   } else {
     view.innerHTML = `<div class="job"><b>${esc(lang)} · ${esc(topic)}</b>
       <p class="stat">这课还没有生成教程。点下面按钮生成（约 1–3 分钟），生成后会自动出现在目录里。</p>
       <button class="go" onclick="runLearnTopic('${esc(lang)}','${esc(topic.replace(/'/g, "\\'"))}')">
         生成这一课</button></div>`;
-    view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!split) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 async function runLearnTopic(lang, topic) {
   $('#learn-topic').value = topic;
   await runLearn(false);
+}
+// 一键边学边练：左栏打开教程，右栏打开该主题的练习，并开启双栏布局
+async function openTopicBoth(lang, topic) {
+  const main = $('#learn-main');
+  if (main && !main.classList.contains('split')) toggleSplitWorkbench();
+  await openCourseFromToc(lang, topic);   // 左栏：教程
+  await showTopicPractices(topic);        // 右栏：练习
 }
 // 打开「其他已生成教程」（不在大纲里，如 custom/ 目录）：右侧主区渲染
 async function openExtraCourse(file) {
@@ -754,15 +1020,20 @@ async function openExtraCourse(file) {
 async function showPracticeList(force) {
   const box = $('#learn-practices');
   if (!box) return;
-  if (box.style.display !== 'none' && !force) {   // 再点一次收起
+  // 双栏（边学边练）模式下练习区常驻右栏，不做"再点收起"，避免把右栏清空
+  const split = $('#learn-main')?.classList.contains('split');
+  if (!split && box.style.display !== 'none' && !force) {   // 单栏：再点一次收起
     box.style.display = 'none';
     return;
   }
   $('#learn-path').style.display = 'none';
   $('#learn-history').style.display = 'none';
-  $('#learn-course-view').style.display = 'none';
+  // 双栏时左栏的教程必须保留（否则"边学边练"的左半屏被清空）
+  if (!split) $('#learn-course-view').style.display = 'none';
   box.style.display = '';
   box.innerHTML = '<span class="stat">加载练习列表…</span>';
+  const hint0 = $('#wb-prac-hint');
+  if (hint0) hint0.style.display = 'none';
   const lang = $('#learn-lang').value;
   let d;
   try {
@@ -826,7 +1097,10 @@ async function openSavedPractice(file) {
   const fakeJob = { id: 'saved-' + file.replace(/[^\w]/g, '_'), kind: 'practice',
                     status: 'done', result: { summary: JSON.stringify(d) } };
   buildPracticeSet(card, fakeJob, d);
-  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // 双栏时右栏内滚动定位；单栏时页面滚动
+  if (!$('#learn-main')?.classList.contains('split')) {
+    view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // ====== 回顾已学内容 ======
