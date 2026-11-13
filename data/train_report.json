@@ -1,25 +1,66 @@
 {
-  "started": "2026-09-28 01:45:14",
+  "started": "2026-10-30 15:09:11",
   "distill": {
-    "pairs": 40,
-    "file": "D:\\learn-agent\\data\\datasets\\sft_distilled.jsonl",
-    "seconds": 354.9
+    "pairs": 248,
+    "file": "learn-agent\\data\\datasets\\sft_distilled.jsonl",
+    "seconds": 6519.5,
+    "llm_calls": 156,
+    "avg_per_call": 41.8
   },
   "knowledge": {
     "knowledge_train": {
-      "docs": 46,
-      "vocab": 3199,
-      "distilled_docs": 40,
-      "hit_rate": 1.0,
-      "index": "D:\\learn-agent\\data\\knowledge\\index.json"
+      "docs": 491,
+      "vocab": 29029,
+      "distilled_docs": 248,
+      "hit_rate": 0.971,
+      "retrieval": {
+        "top1_rate": 0.935,
+        "top3_rate": 0.975,
+        "avg_rank": 0.21,
+        "n": 200
+      },
+      "index": "learn-agent\\data\\knowledge\\index.json"
     }
   },
   "model": {
     "ok": true,
     "model": "learn-agent",
-    "base": "qwen3:8b",
-    "system_chars": 6993,
-    "verify": "Thinking...\n好的，用户让我用一句话自我介绍，并说明我会遵守哪些编码守则。首先，我需要明确\u001b[K\n用户的需求。他们可能是在测试我的回答是否符合之前的设定，或者想确认我是否理解\u001b[K\n编码守则的内容。\n\n首先，自我介绍部分需要简洁有力，突出我的身份和专长。作为learn-agent，我应该\u001b[K\n强调自己是资深编程教练和全栈工程师，擅长Python、JavaScript和Java，同时具备算\u001b[K\n法和开发协助的能力。\n\n接下来是编码守则部分。用户提到的守则包括Python、JS、Java的内存管理、资源处理\u001b[K\n、异常处理等。我需要确保覆盖所有提到的要点，比如Python的with"
+    "base": "qwen3-8b-16k:latest",
+    "system_chars": 6464,
+    "knowledge": {
+      "injected": 22,
+      "skipped": 469,
+      "per_doc_chars": 5542,
+      "skipped_long": 0,
+      "skipped_budget": 469,
+      "used_chars": 5984,
+      "budget": 6000,
+      "total_docs": 491,
+      "prompt_chars": 6464,
+      "kb": {
+        "total_docs": 491,
+        "total_chars": 389397,
+        "by_source": {
+          "seed 内置精华": 40,
+          "distill 蒸馏语料": 424,
+          "learn 学习沉淀": 26,
+          "cheatsheet 速查": 1
+        }
+      },
+      "note": "system prompt 只装 22/491 篇，是因为它要长期驻留在 num_ctx=8192 里，给用户提问和模型回答留空间；整库 389397 字无法常驻。其余 469 篇由运行时按查询检索注入（kb.search），每次对话只取最相关的几篇，命中率见知识库自评。"
+    },
+    "verify": "**自我介绍**：我是learn-agent，资深编程教练与全栈工程师，擅长Python/JS/Java，专注算法教学、前后端开发与函数调用。  \n**编码守则要点**：  \n1. 资源用with/try-with-resources，requests带超时，禁可变默认参数；  \n2. 异常不吞，线程daemon+join，测试覆盖边界/异常/资源释放；  \n3. 算法注意复杂度与边界，代码附测试要点，杜绝内存泄漏/死循环。",
+    "verify_meta": {
+      "ok": true,
+      "content_chars": 214,
+      "thinking_chars": 492,
+      "prompt_eval_count": 3525,
+      "eval_count": 403,
+      "error": null
+    },
+    "verify_prompt": "用三句话以内自我介绍，并列出你会遵守的编码守则要点。",
+    "seconds": 22.3
   },
-  "seconds": 389.6
+  "seconds": 6569.5,
+  "finished": "2026-10-30 16:58:41"
 }

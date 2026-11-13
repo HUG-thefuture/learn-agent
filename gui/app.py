@@ -225,9 +225,15 @@ class App:
         self.btn_cap = ttk.Button(row, text="进阶实战", style="Acc.TButton",
                                   command=self._capstone_run)
         self.btn_cap.pack(side="left", padx=4)
+        self.btn_prac = ttk.Button(row, text="练习", command=self._practice_run)
+        self.btn_prac.pack(side="left", padx=4)
+        self.btn_prac_list = ttk.Button(row, text="历史练习",
+                                        command=self._show_practice_list)
+        self.btn_prac_list.pack(side="left", padx=4)
         ttk.Label(f, text="L0零基础→L6算法 分阶段路径；「下一课」从0开始自动推进；"
-                          "学习自动沉淀知识库；「进阶实战」用已学知识自主完成前后端/算法项目（走完整工作流）。",
-                  style="Dim.TLabel").pack(anchor="w", padx=12)
+                          "学习自动沉淀知识库；「进阶实战」用已学知识自主完成前后端/算法项目（走完整工作流）；"
+                          "「历史练习」可回看/重做已生成的所有练习（存档在 data/practice/）。",
+                  style="Dim.TLabel", wraplength=1000).pack(anchor="w", padx=12)
         self.learn_out = make_text(f)
         self.learn_out.pack(fill="both", expand=True, padx=10, pady=6)
         kbrow = ttk.Frame(f)
@@ -290,7 +296,14 @@ class App:
         threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
 
     def _set_learn_buttons(self, state):
-        for b in (self.btn_learn, self.btn_quiz, self.btn_start, self.btn_cap, self.btn_path):
+        btns = [self.btn_learn, self.btn_quiz, self.btn_start, self.btn_cap,
+                self.btn_path]
+        # 新按钮可能在某些构造路径下不存在，避免 AttributeError
+        for name in ("btn_prac", "btn_prac_list"):
+            b = getattr(self, name, None)
+            if b is not None:
+                btns.append(b)
+        for b in btns:
             b.state([state])
 
     def _learn_run(self):
@@ -314,6 +327,93 @@ class App:
             self._load_models_async()
 
         threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    def _practice_run(self):
+        """生成一套新练习（落盘 data/practice/，可在「历史练习」回看）。"""
+        if "learn" in self.busy:
+            return
+        lang = self.learn_lang.get()
+        topic = self.learn_topic.get().strip() or None
+        self.busy.add("learn")
+        self._set_learn_buttons("disabled")
+        self.learn_out.delete("1.0", "end")
+        self.learn_out.insert("end", f"出题中：{topic or '下一课'}（约 1-2 分钟）…\n", "sys")
+
+        def work():
+            from modules.learning import LearningModule
+            return LearningModule().practice(
+                lang, topic, log_fn=lambda m: self.q.put(("log_learn", m)))
+
+        def done(res):
+            self._render_practice(res)
+            self.busy.discard("learn")
+            self._set_learn_buttons("!disabled")
+
+        threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
+
+    def _render_practice(self, res):
+        """把练习集渲染到 learn_out（题目/要求/起步代码/判据）。"""
+        t = self.learn_out
+        t.delete("1.0", "end")
+        if not isinstance(res, dict) or not res.get("ok"):
+            t.insert("end", str((res or {}).get("summary", res)) + "\n", "bad")
+            return
+        p = res.get("practice") or {}
+        items = p.get("items") or []
+        t.insert("end", f"🎯 练习集：{p.get('topic', '')} · 共 {len(items)} 题\n", "head")
+        t.insert("end", f"存档：{p.get('path', '')}（可在「历史练习」回看）\n\n", "sys")
+        for i, it in enumerate(items, 1):
+            t.insert("end", f"练习{i}：{it.get('title', '')}\n", "head")
+            t.insert("end", (it.get("task") or "") + "\n", "bot")
+            t.insert("end", "起步代码：\n", "sys")
+            t.insert("end", (it.get("starter") or "") + "\n", "bot")
+            exp = it.get("expects") or []
+            if exp:
+                t.insert("end", "预期输出：\n", "sys")
+                for e in exp:
+                    t.insert("end", f"  {e}\n", "ok")
+            t.insert("end", "\n")
+
+    def _show_practice_list(self):
+        """列出磁盘上所有已保存练习（服务重启也不会丢）。"""
+        import json as _json
+        from core.config import data_dir
+        t = self.learn_out
+        t.delete("1.0", "end")
+        pdir = data_dir() / "practice"
+        files = sorted(pdir.glob("*.json"), key=lambda p: p.stat().st_mtime,
+                       reverse=True) if pdir.exists() else []
+        if not files:
+            t.insert("end", "还没有已保存的练习。点「练习」生成一套"
+                            "（会存档到 data/practice/，以后随时能回看）。\n", "sys")
+            return
+        t.insert("end", f"📋 历史练习（共 {len(files)} 套，最新在前）\n", "head")
+        t.insert("end", "点击下方按钮查看对应练习；改代码后可回「练习」重新出题。\n\n", "sys")
+        for p in files[:30]:
+            try:
+                d = _json.loads(p.read_text(encoding="utf-8", errors="replace"))
+            except (OSError, ValueError):
+                t.insert("end", f"  ✗ {p.name}（文件损坏）\n", "bad")
+                continue
+            mt = time.strftime("%Y-%m-%d %H:%M", time.localtime(p.stat().st_mtime))
+            t.insert("end", f"  [{mt}] {d.get('lang', '')} · {d.get('topic', '')}"
+                            f" · {len(d.get('items') or [])} 题  ", "bot")
+            # 每个文件一个按钮，点击把该练习渲染到主文本区
+            btn = ttk.Button(t, text="查看",
+                             command=lambda pp=p: self._view_saved_practice(pp))
+            t.window_create("end", window=btn)
+            t.insert("end", "\n")
+
+    def _view_saved_practice(self, path):
+        import json as _json
+        try:
+            d = _json.loads(path.read_text(encoding="utf-8", errors="replace"))
+        except (OSError, ValueError) as e:
+            self.learn_out.insert("end", f"\n读取失败: {e}\n", "bad")
+            return
+        self._render_practice({"ok": True, "practice": {
+            "topic": d.get("topic", ""), "items": d.get("items") or [],
+            "path": str(path)}})
 
     def _quiz_run(self):
         topic = self.learn_topic.get().strip()
@@ -367,28 +467,73 @@ class App:
     def _tab_leetcode(self, nb):
         f = ttk.Frame(nb)
         nb.add(f, text=" 力扣刷题 ")
-        cols = ("slug", "title", "diff")
-        tv = ttk.Treeview(f, columns=cols, show="headings", height=8)
-        for c, w, txt in [("slug", 170, "slug"), ("title", 380, "题目"),
-                          ("diff", 90, "难度")]:
+        # 左侧：题目列表（带「讲解」标记）+ 操作按钮；右侧：讲解正文
+        split = ttk.Frame(f)
+        split.pack(fill="both", expand=True, padx=10, pady=(10, 4))
+        left = ttk.Frame(split)
+        left.pack(side="left", fill="y", padx=(0, 8))
+        cols = ("slug", "title", "diff", "exp")
+        tv = ttk.Treeview(left, columns=cols, show="headings", height=18)
+        for c, w, txt in [("slug", 150, "slug"), ("title", 250, "题目"),
+                          ("diff", 70, "难度"), ("exp", 50, "讲解")]:
             tv.heading(c, text=txt)
             tv.column(c, width=w, anchor="w")
-        tv.pack(fill="x", padx=10, pady=(10, 4))
+        tv.pack(fill="both", expand=True)
+        tv.bind("<<TreeviewSelect>>", lambda e: self._lc_show_saved())
         self.lc_tree = tv
-        btns = ttk.Frame(f)
-        btns.pack(fill="x", padx=10, pady=4)
+        btns = ttk.Frame(left)
+        btns.pack(fill="x", pady=4)
         self.btn_solve = ttk.Button(btns, text="完整工作流解题", style="Acc.TButton",
                                     command=self._lc_solve)
         self.btn_solve.pack(side="left")
-        self.btn_explain = ttk.Button(btns, text="题解讲解", command=self._lc_explain)
-        self.btn_explain.pack(side="left", padx=6)
-        ttk.Label(btns, text="解题走 思考→计划→审查→实现→测试+内存泄漏检测 全流程，约1~3分钟",
-                  style="Dim.TLabel").pack(side="left", padx=10)
-        self.lc_out = make_text(f)
-        self.lc_out.pack(fill="both", expand=True, padx=10, pady=6)
-        from modules.leetcode import list_problems
+        self.btn_explain = ttk.Button(btns, text="查看讲解", command=self._lc_show_saved)
+        self.btn_explain.pack(side="left", padx=4)
+        self.btn_regen = ttk.Button(btns, text="重新生成", command=self._lc_explain)
+        self.btn_regen.pack(side="left", padx=4)
+        ttk.Label(left, text="选中题目即显示本地已保存讲解；没有才需重新生成（约30~90秒）",
+                  style="Dim.TLabel", wraplength=300).pack(anchor="w")
+        right = ttk.Frame(split)
+        right.pack(side="left", fill="both", expand=True)
+        self.lc_out = make_text(right)
+        self.lc_out.pack(fill="both", expand=True)
+        self._lc_refresh_tree()
+
+    def _lc_refresh_tree(self):
+        """刷新题目列表，标注每题是否已有本地讲解。"""
+        from modules.leetcode import list_problems, load_explain
+        tv = self.lc_tree
+        for iid in tv.get_children():
+            tv.delete(iid)
+        n_have = 0
         for p in list_problems():
-            tv.insert("", "end", values=(p["slug"], p["title"], p["difficulty"]))
+            has = bool(load_explain(p["slug"]))
+            n_have += has
+            tv.insert("", "end", values=(p["slug"], p["title"], p["difficulty"],
+                                         "✓" if has else "—"))
+        if hasattr(self, "_lc_tip"):
+            self._lc_tip.config(text=f"共 {len(list_problems())} 题，已有讲解 {n_have} 题")
+        else:
+            self._lc_tip = ttk.Label(self.lc_tree.master,
+                                     text=f"共 {len(list_problems())} 题，已有讲解 {n_have} 题",
+                                     style="Dim.TLabel")
+            self._lc_tip.pack(anchor="w")
+
+    def _lc_show_saved(self):
+        """显示选中题目的本地已保存讲解（不重新生成，秒开）。"""
+        slug = self._lc_sel()
+        if not slug:
+            return
+        from modules.leetcode import load_explain
+        text = load_explain(slug)
+        t = self.lc_out
+        t.delete("1.0", "end")
+        if text:
+            t.insert("end", f"📖 {slug} 的本地讲解（{len(text)} 字）\n", "head")
+            t.insert("end", text, "bot")
+            t.insert("end", "\n\n（已保存，可随时回看；上方「重新生成」才会覆盖）\n", "sys")
+        else:
+            t.insert("end", f"{slug} 还没有讲解。点上方「重新生成」生成一份"
+                            "（约 30~90 秒，生成后自动保存并出现在本列表）。\n", "sys")
 
     def _lc_sel(self):
         sel = self.lc_tree.selection()
@@ -401,6 +546,7 @@ class App:
         self.busy.add("lc")
         self.btn_solve.state(["disabled"])
         self.btn_explain.state(["disabled"])
+        self.btn_regen.state(["disabled"])
         self.lc_out.delete("1.0", "end")
         self.lc_out.insert("end", f"开始解题: {slug}\n", "sys")
 
@@ -426,30 +572,44 @@ class App:
                              "bad" if lt["leak"]["leaky"] else "ok")
             t.insert("end", f"\n产物目录: {res.get('workspace', '')}\n", "sys")
             self.busy.discard("lc")
-            self.btn_solve.state(["!disabled"])
-            self.btn_explain.state(["!disabled"])
+            for b in (self.btn_solve, self.btn_explain, self.btn_regen):
+                b.state(["!disabled"])
 
         threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
 
     def _lc_explain(self):
+        """重新生成讲解（会覆盖已有的；仅查看请用「查看讲解」按钮/选中题目）。"""
         slug = self._lc_sel()
         if not slug or "lc" in self.busy:
             return
+        from modules.leetcode import load_explain
+        if load_explain(slug):
+            from tkinter import messagebox
+            if not messagebox.askyesno(
+                    "重新生成讲解",
+                    f"{slug} 已有讲解。重新生成会覆盖现有内容，确定继续？"):
+                return
         self.busy.add("lc")
         self.btn_solve.state(["disabled"])
         self.btn_explain.state(["disabled"])
+        self.btn_regen.state(["disabled"])
         self.lc_out.delete("1.0", "end")
-        self.lc_out.insert("end", "生成题解讲解…\n", "sys")
+        self.lc_out.insert("end", f"生成 {slug} 的题解讲解…（约 30~90 秒）\n", "sys")
 
         def work():
             from modules.leetcode import explain
             return explain(slug)
 
         def done(text):
-            self.lc_out.insert("end", str(text), "bot")
+            if isinstance(text, str) and text.startswith("[执行出错]"):
+                self.lc_out.insert("end", str(text) + "\n", "bad")
+            else:
+                self.lc_out.insert("end", str(text), "bot")
+                self.lc_out.insert("end", "\n\n✅ 已保存到本地，下次选中题目即可秒开查看。\n", "sys")
             self.busy.discard("lc")
-            self.btn_solve.state(["!disabled"])
-            self.btn_explain.state(["!disabled"])
+            for b in (self.btn_solve, self.btn_explain, self.btn_regen):
+                b.state(["!disabled"])
+            self._lc_refresh_tree()
 
         threading.Thread(target=lambda: self._run_bg(work, done), daemon=True).start()
 
@@ -608,8 +768,9 @@ class App:
         self.btn_train = ttk.Button(row, text="开始训练", style="Acc.TButton",
                                     command=self._train_run)
         self.btn_train.pack(side="left", padx=10)
-        ttk.Label(f, text="训练 = 数据蒸馏(qwen3:14b) → 知识库TF-IDF重建(含命中率评估) → 重建 learn-agent 定制模型。"
-                          "完整训练约6~15分钟，期间可切其他页签继续使用。",
+        ttk.Label(f, text="训练 = 数据蒸馏 → 知识库TF-IDF重建(含命中率评估) → 重建 learn-agent 定制模型。"
+                          "蒸馏耗时与主题数×模型档位正相关（云端强模型每条约30~90秒），"
+                          "运行中会按真实已耗时动态估算剩余时间；知识库与定制模型秒级完成。",
                   style="Dim.TLabel").pack(anchor="w", padx=12)
         self.train_log = make_text(f)
         self.train_log.pack(fill="both", expand=True, padx=10, pady=6)
@@ -631,14 +792,54 @@ class App:
         k = rep.get("knowledge", {}).get("knowledge_train", {})
         m = rep.get("model", {})
         d = rep.get("distill", {})
+        kn = m.get("knowledge") or {}
+        vm = m.get("verify_meta") or {}
         t.insert("end", "上次训练报告 ", "head")
-        t.insert("end", f"({rep.get('started', '')}，耗时 {rep.get('seconds', '?')}s)\n", "sys")
-        t.insert("end", f"知识库: {k.get('docs', '?')} 篇 / 词表 {k.get('vocab', '?')} / "
-                        f"命中率 {k.get('hit_rate', 0):.0%} / 蒸馏新增 {k.get('distilled_docs', '?')} 条\n", "ok")
-        t.insert("end", f"定制模型: {m.get('model', '-')} (基座 {m.get('base', '-')}, "
-                        f"系统提示词 {m.get('system_chars', '?')} 字)\n", "ok")
-        if d:
-            t.insert("end", f"蒸馏: {d.get('pairs', '?')} 对，耗时 {d.get('seconds', '?')}s\n", "bot")
+        t.insert("end", f"({rep.get('started', '')}"
+                        + (f" → {rep['finished']}" if rep.get("finished") else "")
+                        + f"，耗时 {rep.get('seconds', '?')}s)\n", "sys")
+        # ① 蒸馏
+        if d.get("skipped"):
+            t.insert("end", "① 蒸馏: 已跳过（复用已有数据集）\n", "sys")
+        elif d:
+            t.insert("end", f"① 蒸馏: {d.get('pairs', '?')} 对语料，"
+                            f"{d.get('llm_calls', '?')} 次模型调用，"
+                            f"平均 {d.get('avg_per_call', '?')}s/次，"
+                            f"用时 {d.get('seconds', '?')}s\n", "bot")
+        # ② 知识库
+        hr = k.get("hit_rate")
+        t.insert("end", f"② 知识库: {k.get('docs', '?')} 篇 / 词表 {k.get('vocab', '?')} / "
+                        f"命中率 {(hr * 100):.0f}% / 蒸馏语料 {k.get('distilled_docs', '?')} 条\n"
+                 if hr is not None else
+                 f"② 知识库: {k.get('docs', '?')} 篇 / 词表 {k.get('vocab', '?')}\n", "ok")
+        # ③ 定制模型
+        line = (f"③ 定制模型: {m.get('model', '-')} (基座 {m.get('base', '-')}, "
+                f"system {m.get('system_chars', '?')} 字")
+        if kn.get("total_docs") is not None:
+            line += (f"，常驻知识 {kn.get('injected')}/{kn.get('total_docs')} 篇")
+        line += ")\n"
+        t.insert("end", line, "ok")
+        # ③b 知识库分工说明：常驻精华 + 运行时检索（别让"22/244"看着像缺陷）
+        if kn.get("note"):
+            t.insert("end", f"   {kn['note']}\n", "sys")
+        kbstat = kn.get("kb") or {}
+        if kbstat.get("by_source"):
+            parts = "、".join(f"{k}{v}篇" for k, v in kbstat["by_source"].items())
+            t.insert("end", f"   全库 {kbstat.get('total_docs')} 篇 / "
+                            f"{kbstat.get('total_chars')} 字（{parts}）\n", "sys")
+        ret = (k.get("retrieval") or {})
+        if ret.get("top1_rate") is not None:
+            t.insert("end", f"   检索自评: 排第1 {ret['top1_rate']:.0%} / "
+                            f"进前3 {ret['top3_rate']:.0%} / "
+                            f"平均排名 {ret.get('avg_rank', '?')}\n", "sys")
+        # ④ 验证回答：完整展示，不截断
+        verify = m.get("verify") or ""
+        if verify:
+            t.insert("end", f"④ 验证回答（完整 {vm.get('content_chars', len(verify))} 字，"
+                            f"思考链 {vm.get('thinking_chars', 0)} 字已分离）:\n", "sys")
+            t.insert("end", verify.rstrip() + "\n", "bot")
+        elif vm.get("error"):
+            t.insert("end", f"④ 验证失败: {vm['error']}\n", "bad")
 
     def _train_run(self):
         if "train" in self.busy:
@@ -648,17 +849,13 @@ class App:
         self.train_log.insert("end", "\n===== 训练开始（日志见下方）=====\n", "head")
 
         def work():
-            import io
-            from contextlib import redirect_stdout
             from training.run_training import run
-            buf = io.StringIO()
-            with redirect_stdout(buf):
-                run(skip_distill=self.skip_distill.get(),
-                    topics_limit=int(self.topics_n.get() or 5))
-            return buf.getvalue()
+            return run(skip_distill=self.skip_distill.get(),
+                       topics_limit=int(self.topics_n.get() or 5),
+                       log_fn=lambda m: self.q.put(("log_train", m)))
 
         def done(text):
-            self.train_log.insert("end", text, "sys")
+            # 训练日志已通过 log_train 实时流式显示，这里只落一条完成提示
             self.train_log.insert("end", "✅ 训练完成，learn-agent 模型已更新\n", "ok")
             self.busy.discard("train")
             self.btn_train.state(["!disabled"])
@@ -679,37 +876,44 @@ class App:
         try:
             while True:
                 kind, payload = self.q.get_nowait()
-                if kind == "chat_delta":
-                    self._chat_stream += payload
-                    t = self.chatlog
-                    t.delete(self._chat_pos, "end")
-                    t.insert(self._chat_pos, self._chat_stream, "bot")
-                    t.see("end")
-                elif kind == "chat_done":
-                    self.chatlog.insert("end", "\n\n", "bot")
-                    self.busy.discard("chat")
-                    self.btn_send.state(["!disabled"])
-                elif kind == "chat_err":
-                    self.chatlog.insert("end", f"[模型不可用] {payload}\n", "bad")
-                    self.busy.discard("chat")
-                    self.btn_send.state(["!disabled"])
-                elif kind == "models":
-                    self._apply_models(payload)
-                elif kind == "log_lc":
-                    self.lc_out.insert("end", payload + "\n", "sys")
-                    self.lc_out.see("end")
-                elif kind == "log_learn":
-                    self.learn_out.insert("end", payload + "\n", "sys")
-                    self.learn_out.see("end")
-                elif kind == "log_task":
-                    self.task_log.insert("end", payload + "\n", "sys")
-                    self.task_log.see("end")
-                elif kind == "done":
-                    cb, res = payload
-                    try:
-                        cb(res)
-                    except Exception as e:
-                        print("GUI回调异常:", e, file=sys.stderr)
+                try:
+                    if kind == "chat_delta":
+                        self._chat_stream += payload
+                        t = self.chatlog
+                        t.delete(self._chat_pos, "end")
+                        t.insert(self._chat_pos, self._chat_stream, "bot")
+                        t.see("end")
+                    elif kind == "chat_done":
+                        self.chatlog.insert("end", "\n\n", "bot")
+                        self.busy.discard("chat")
+                        self.btn_send.state(["!disabled"])
+                    elif kind == "chat_err":
+                        self.chatlog.insert("end", f"[模型不可用] {payload}\n", "bad")
+                        self.busy.discard("chat")
+                        self.btn_send.state(["!disabled"])
+                    elif kind == "models":
+                        self._apply_models(payload)
+                    elif kind == "log_lc":
+                        self.lc_out.insert("end", payload + "\n", "sys")
+                        self.lc_out.see("end")
+                    elif kind == "log_learn":
+                        self.learn_out.insert("end", payload + "\n", "sys")
+                        self.learn_out.see("end")
+                    elif kind == "log_task":
+                        self.task_log.insert("end", payload + "\n", "sys")
+                        self.task_log.see("end")
+                    elif kind == "log_train":
+                        self.train_log.insert("end", payload + "\n", "sys")
+                        self.train_log.see("end")
+                    elif kind == "done":
+                        cb, res = payload
+                        try:
+                            cb(res)
+                        except Exception as e:
+                            print("GUI回调异常:", e, file=sys.stderr)
+                except Exception as e:
+                    # 单条消息处理异常不得杀掉轮询循环（否则全部页签失去异步更新）
+                    print("GUI队列处理异常:", kind, e, file=sys.stderr)
         except queue.Empty:
             pass
         self.root.after(80, self._poll_queue)
@@ -724,9 +928,13 @@ class App:
             kb_docs = len(kb().docs)
         except Exception:
             kb_docs = "?"
-        ext = "开" if cfg()["external_model"].get("enabled") else "未配置Key"
+        try:
+            from core.llm import external_enabled
+            ext = "云端增强: 开" if external_enabled() else "云端增强: 未配置"
+        except Exception:
+            ext = "云端增强: ?"
         self.status.config(text=f"Ollama 模型: {', '.join(names) or '离线'} | "
-                                f"知识库 {kb_docs} 篇 | 外部增强: {ext}")
+                                f"知识库 {kb_docs} 篇 | {ext}")
 
     def _load_models_async(self):
         threading.Thread(target=self._load_models, daemon=True).start()
@@ -775,6 +983,15 @@ def main(smoke=False):
         from core.config import ROOT
         marker = ROOT / "smoke_ok.txt"
         (ROOT / "smoke_stage.txt").write_text("start", encoding="utf-8")
+    # 登记实例（谁在跑、跑哪一版），供 launch.py 判断是否需要重启到新版
+    _state = {}
+    try:
+        from core.version import fingerprint
+        from core.runtime import write_state
+        fp = fingerprint()
+        _state = write_state("gui", fp["build"], fp["hash"])
+    except Exception:
+        pass
     try:
         root = tk.Tk()
         App(root, smoke=smoke)
@@ -786,11 +1003,19 @@ def main(smoke=False):
     except Exception:
         import traceback
         from core.config import data_dir
-        with open(data_dir() / "logs" / "gui_error.log", "a", encoding="utf-8") as f:
+        p = data_dir() / "logs"
+        p.mkdir(parents=True, exist_ok=True)
+        with open(p / "gui_error.log", "a", encoding="utf-8") as f:
             f.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] main() fatal:\n")
             traceback.print_exc(file=f)
         raise
     finally:
+        # 正常关闭：注销实例登记，下次双击图标不会被误判为"已有实例在跑"
+        try:
+            from core.runtime import clear_state
+            clear_state((_state or {}).get("pid"))
+        except Exception:
+            pass
         if smoke and marker:
             marker.write_text("GUI SMOKE OK", encoding="utf-8")
             print("GUI SMOKE OK")

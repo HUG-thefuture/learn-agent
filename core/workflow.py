@@ -13,7 +13,7 @@ from pathlib import Path
 from core.config import cfg, data_dir, outputs_dir
 from core import codecheck
 from core.knowledge import kb
-from core.llm import router, LLMError
+from core.llm import router, LLMError, external_enabled
 
 SYS_ENGINEER = (
     "你是一名资深全栈工程师与算法教练，精通 Python/JavaScript/Java，"
@@ -36,6 +36,28 @@ def _fmt_issues(issues):
         return "（无）"
     return "\n".join(f"- [{i.get('severity', '?')}] {i.get('desc', i) if isinstance(i, dict) else i}"
                      for i in issues)
+
+
+_STUB_MARKERS = [
+    'NotImplementedError',
+    'pass  # 避免语法错误',
+    '占位',
+    'TODO',
+    '后续根据需求补充',
+    '...',   # 模型输出 '...' 省略占位
+]
+
+
+def _is_stub(code: str) -> bool:
+    """Cheap detect of placeholder / empty implementation."""
+    low = code.lower()
+    for m in _STUB_MARKERS:
+        if m.lower() in low:
+            return True
+    n_pass = len(re.findall(r"(?m)^\s{4}pass\s*$", code))
+    if n_pass and len(re.findall(r"\b(return|print)\b", code)) == 0:
+        return True
+    return False
 
 
 class Workflow:
@@ -120,11 +142,11 @@ class Workflow:
 
     def _deep(self, force_think=False):
         """质量门连续失败达到阈值 -> 升级：外部模型优先，否则深度模型+思考模式。"""
-        if getattr(self, "force_external", False) and cfg()["external_model"].get("enabled"):
+        if getattr(self, "force_external", False) and external_enabled():
             self.log(">>> 质量门连续未过，升级至外部模型增强")
             return {"force": "external"}
         if self.r.fail_streak >= self.escalate_after:
-            if cfg()["external_model"].get("enabled"):
+            if external_enabled():
                 self.log(">>> 模型通道异常，升级至外部模型")
                 return {"force": "external"}
             self.log(">>> 模型通道异常，使用深度模型重试")
@@ -134,6 +156,8 @@ class Workflow:
     def _llm_json(self, prompt, stage, think=False):
         kw = self._deep()
         kw.setdefault("deep", True)
+        if "force" not in kw:
+            kw.setdefault("tier", "fast")   # 常规质量门调用走 fast 档，避免强档过慢
         try:
             data = self.r.ask_json(prompt, system=SYS_ENGINEER, **kw)
             self.r.ok()
@@ -159,6 +183,8 @@ class Workflow:
 请进行深入思考：1) 任务的真正目标与约束 2) 可能的技术路线对比 3) 边界条件与易错点
 4) 资源管理/内存泄漏等风险点 5) 本轮应采取的方案。输出结构化中文思考（要点式，<=500字）。"""
         kw = self._deep(force_think=True)
+        if "force" not in kw:
+            kw.setdefault("tier", "fast")   # 思考也走 fast 档
         text = self.r.ask(prompt, system=SYS_ENGINEER, **kw)
         self.r.ok()
         self._save(f"round{round_no}_1_think.md", text)
@@ -227,7 +253,12 @@ severity=high 的问题将导致计划打回重做；pass 的判定标准是"按
         self._save(f"round{round_no}_3_plan_review.json",
                    json.dumps(verdict, ensure_ascii=False, indent=2))
         n_high = sum(1 for i in verdict.get("issues", []) if i.get("severity") == "high")
-        passed = verdict.get("pass") is True and n_high == 0
+        # 项目/进阶实战：计划评审仅做提示，不阻塞开发——真正的正确性由代码评审+测试把关。
+        # 普通任务仍从严：计划不通过则打回重做。
+        if self.kind == "project":
+            passed = True
+        else:
+            passed = verdict.get("pass") is True and n_high == 0
         self.log(f"计划审查: {'通过' if passed else '不通过(high=' + str(n_high) + ')'}")
         return {"passed": passed, "raw": verdict}
 
@@ -265,6 +296,11 @@ severity=high 的问题将导致计划打回重做；pass 的判定标准是"按
         for name, code in files.items():
             safe = name.replace("\\", "_").replace("/", "_").replace("..", "_")
             (code_dir / safe).write_text(code, encoding="utf-8", errors="replace")
+        # 占位/空实现拦截：进阶实战等任务严禁交付 stubbed 代码
+        for name, code in files.items():
+            if _is_stub(code):
+                raise LLMError(
+                    f"开发阶段产出了占位实现（{name}）: 检测到未实现/占位标记。你必须输出完整可运行的真正实现，禁止 raise NotImplementedError、pass 占位、TODO 空壳或空 return。请重新规划并编写真实代码。")
         self.log(f"开发完成: {len(files)} 个文件 -> {code_dir}")
         return files
 
@@ -420,9 +456,7 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                 # 测试驱动修复：用确切 traceback 精准再修一轮
                 test_issues = [{"severity": "high",
                                 "desc": f"[测试失败:{r['file']}] {(r.get('error') or r.get('output') or '')[:450]}",
-                                "fix": "按报错修复。先核对断言的期望值是否与题目语义一致："
-                                       "若测试脚手架的 expected 本身算错，修脚手架而不是解法；"
-                                       "若解法确实有错再修实现（常见：缺 import/名称拼写/边界条件）"}
+                                "fix": "按报错修复该文件（常见：缺 import/名称拼写/库版本API不匹配）"}
                                for r in tr["runs"] if not r["ok"]]
                 self.log(f">>> 测试驱动修复 {len(test_issues)} 个失败文件（带确切报错）")
                 return self.hotfix(test_issues, _repaired=_repaired + 1)
@@ -456,13 +490,11 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
         feedback = ""
         fail_streak = 0
         last_review_issues = []
-        last_test_bad = None
-        test_fail_streak = 0
         for rnd in range(1, self.max_rounds + 1):
             self.log(f"===== 第 {rnd}/{self.max_rounds} 轮 =====")
             # 质量门连续失败 -> 本轮强制外部模型（若已配置）
             self.force_external = (fail_streak >= self.escalate_after
-                                   and cfg()["external_model"].get("enabled"))
+                                   and external_enabled())
             try:
                 thought = self.think(feedback, rnd)
                 plan = self.plan(thought, rnd)
@@ -473,6 +505,8 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                     fail_streak += 1
                     continue  # 回到最初步骤（思考）
                 files = self.develop(plan, rnd)
+                if not files:
+                    raise LLMError("开发阶段未产出任何代码文件（空 files）。你必须输出完整可运行的代码，文件个数不少于 1。请重新规划并编写真实实现。")
                 cr = self.review_code(files, plan, rnd)
                 last_review_issues = cr["issues"]
                 if not cr["passed"]:
@@ -485,23 +519,11 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                     bad = [f"{e['file']}: {e['error'] or e['output'][:200]}" for e in tr["runs"] if not e["ok"]]
                     bad += [f"泄漏[{l['file']}.{l['func']}]: {l['detail']}" for l in tr["leaks"] if l["leaky"]]
                     feedback = "上一轮【测试】未通过：\n- " + "\n- ".join(bad) + \
-                               "\n请重新思考、修正计划与实现。" \
-                               "注意：先核对失败断言的期望值本身是否与题目语义一致——" \
-                               "若测试脚手架的 expected 算错了，应修正脚手架而不是实现。"
-                    repeated = last_test_bad is not None and bool(set(bad) & set(last_test_bad))
-                    test_fail_streak += 1
-                    if repeated or test_fail_streak >= 2:
-                        feedback += ("\n【重要】同样的测试失败已连续出现，而实现已重新生成过——"
-                                     "基本可断定是测试脚手架的期望值算错。请用朴素暴力法独立重算"
-                                     "该用例的正确答案并修正脚手架的 expected；"
-                                     "严禁为迁就错误的期望值改坏与题目语义一致的实现。")
-                    last_test_bad = bad
+                               "\n请重新思考、修正计划与实现。"
                     fail_streak += 1
                     continue
                 # 全部通过
                 self.r.ok()
-                last_test_bad = None
-                test_fail_streak = 0
                 summary = (f"任务完成（第{rnd}轮通过）：{plan.get('summary', '')}\n"
                            f"文件: {', '.join(files.keys())}\n"
                            f"验收: {plan.get('acceptance', '-')}")
@@ -514,9 +536,10 @@ pass=false 或存在 high 问题将打回重做；若仅有 medium/low 问题请
                                "workspace": str(self.workspace)}
                 self.log("✅ 全部质量门通过，任务完成（S6 复盘已归档）")
                 return self.result
-            except LLMError as e:
-                self.log(f"模型调用异常: {e}")
-                feedback = f"上一轮模型调用异常：{e}，请换一种更稳妥的方案。"
+            except (LLMError, Exception) as e:
+                # 模型输出可能为 None/畸形导致某一步崩溃，绝不让单步异常杀掉整个任务
+                self.log(f"模型调用异常/步骤异常: {e}")
+                feedback = f"上一轮步骤异常：{type(e).__name__}: {e}，请换一种更稳妥、输出合法 JSON 的方案。"
                 fail_streak += 1
         # 轮次用尽 -> 定向修复（只改问题文件），以测试为最终裁决
         if self.hotfix(last_review_issues):

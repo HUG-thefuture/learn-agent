@@ -17,7 +17,10 @@
   python main.py ask "..."                 单问（快模型）
   python main.py tools "搜索xxx并总结"      function-calling 工具循环
   python main.py kb "查询知识"             知识库检索
+  python main.py modelpool                模型池自检：实际调用顺序/可用性/冷却
+  python main.py modelpool --probe        真实探测全部通道（慢，消耗额度）
   python main.py train                     一键训练
+  python launch.py web|gui                 智能启动：代码版本变了自动重启到新版
   python main.py serve                     启动 Web 控制台
 """
 import argparse
@@ -248,10 +251,89 @@ def cmd_eval(_args):
     run()
 
 
-def cmd_serve(_args):
+def cmd_modelpool(args):
+    """模型池自检：展示各档位的实际调用顺序、可用性画像与冷却状态。
+
+    排序策略＝可用性优先、兼顾性能：有成功记录的通道按可用率+新近度靠前，
+    从未调用过的保持配置原序，只失败过的沉底。画像持久化在
+    data/memory/llm_channels.json（7 天过期）。
+    --probe 会对每个通道发一次最小请求做真实探测并刷新画像（较慢、会消耗额度）。
+    """
+    from core.llm import router, flush_health
+    r = router()
+    if args.clear:
+        r._health.clear()
+        r._lat.clear()
+        r.flush_health()
+        print("已清空可用性画像（下次调用将重新按配置顺序探测）")
+        return
+
+    def _dump(tier):
+        entries = r._cloud_tier(strong=(tier == "strong"))
+        ordered = r._order_cloud(entries)
+        st = r.channel_state()
+        muted = {m["label"]: m["cooldown_left"] for m in st["muted"]}
+        print(f"\n=== {tier} 档（共 {len(ordered)} 条，按实际调用顺序）===")
+        for i, e in enumerate(ordered, 1):
+            name = e.get("name") or e.get("model")
+            h = st["health"].get(name) or {}
+            mark = "✓" if h.get("ok") else ("✗" if h.get("fail") else "·")
+            extra = []
+            if h.get("success_rate") is not None:
+                ok, fail = h.get("ok", 0), h.get("fail", 0)
+                extra.append(f"成功率{h['success_rate']:.0%}({ok}/{ok + fail})")
+            if h.get("last_ok_ago") is not None:
+                extra.append(f"上次成功{h['last_ok_ago']}s前")
+            if muted.get(name):
+                extra.append(f"冷却{int(muted[name])}s")
+            eta = st["latency"].get(name)
+            if eta:
+                extra.append(f"耗时≈{eta:.0f}s")
+            print(f"  {i:>2}. {mark} {name:<42} {' '.join(extra)}")
+
+    if args.probe:
+        _probe_all(r)
+
+    _dump("strong")
+    _dump("fast")
+    print(f"\ncloud_first={r.cloud_first_effective}，画像文件: {r._health_path()}")
+    flush_health()
+
+
+def _probe_all(r, timeout=30):
+    """对每个通道发一次极小请求，真实探测可用性并刷新画像。"""
+    import time as _t
+    msgs = [{"role": "user", "content": "ping"}]
+    for tier in ("strong", "fast"):
+        for e in r._cloud_tier(strong=(tier == "strong")):
+            name = e.get("name") or e.get("model")
+            t0 = _t.time()
+            try:
+                out = r._cloud_entry_chat(e, msgs, json_mode=False)
+                r._note_health(name, bool(out and out.strip()))
+                r._note_latency(name, _t.time() - t0)
+                print(f"  ✓ {name} ({_t.time() - t0:.1f}s)")
+            except Exception as ex:
+                r._note_health(name, False)
+                print(f"  ✗ {name}: {str(ex)[:80]}")
+    r.flush_health()
+
+
+def cmd_serve(args):
+    port = int(getattr(args, "port", 0) or 7860)
     from webapp.app import app
-    print("Web 控制台: http://127.0.0.1:7860")
-    app.run(host="127.0.0.1", port=7860, debug=False)
+    # 启动即登记「谁在跑、跑的是哪一版代码」，供 launch.py 判断要不要重启到新版
+    try:
+        import os
+        from core.version import fingerprint
+        from core.runtime import write_state
+        fp = fingerprint()
+        write_state("web", fp["build"], fp["hash"], port=port)
+        print(f"[serve] build {fp['build']} 已登记（PID {os.getpid()}，端口 {port}）")
+    except Exception as e:
+        print(f"[serve] 实例登记失败（不影响服务）：{e}")
+    print(f"Web 控制台: http://127.0.0.1:{port}")
+    app.run(host="127.0.0.1", port=port, debug=False)
 
 
 def cmd_gui(_args):
@@ -304,7 +386,14 @@ def main():
     p.add_argument("--database", default=None)
     p.add_argument("--schema", default=None, help="查看某库表结构")
     p.set_defaults(fn=cmd_db)
-    sub.add_parser("serve").set_defaults(fn=cmd_serve)
+    p = sub.add_parser("modelpool", help="模型池自检：实际调用顺序/可用性/冷却")
+    p.add_argument("--probe", action="store_true",
+                   help="对每个通道发最小请求做真实探测（慢，消耗额度）")
+    p.add_argument("--clear", action="store_true", help="清空可用性画像，恢复配置原始顺序")
+    p.set_defaults(fn=cmd_modelpool)
+    p = sub.add_parser("serve")
+    p.add_argument("--port", type=int, default=7860, help="监听端口（默认 7860）")
+    p.set_defaults(fn=cmd_serve)
     sub.add_parser("gui").set_defaults(fn=cmd_gui)
     args = ap.parse_args()
     args.fn(args)

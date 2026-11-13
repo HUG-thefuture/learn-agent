@@ -1,0 +1,44 @@
+{
+  "lang": "python",
+  "topic": "列表/字典/集合/元组",
+  "items": [
+    {
+      "title": "用集合与列表整理成绩并生成元组摘要",
+      "task": "给定成绩列表 scores，先去重并按升序得到唯一分数列表；再用元组返回（最低分，最高分，去重后的数量）。示例：scores = [88, 92, 75, 92, 88, 100] 时，唯一分数为 [75, 88, 92, 100]，摘要为 (75, 100, 4)。",
+      "starter": "scores = [88, 92, 75, 92, 88, 100]\n# TODO: 使用 set 去重并用 sorted 排序，得到唯一分数列表 unique_scores\nunique_scores = []\n# TODO: 用 min(scores)、max(scores) 和 len(unique_scores) 构造元组 summary\nsummary = ()\nprint('唯一分数:', unique_scores)\nprint('成绩摘要:', summary)",
+      "expects": [
+        "唯一分数: [75, 88, 92, 100]",
+        "成绩摘要: (75, 100, 4)"
+      ]
+    },
+    {
+      "title": "用字典统计词频并用集合去重",
+      "task": "给定 words 列表，用字典统计每个词出现次数；用集合得到去重词汇并排序；再找出出现次数大于 1 的词并排序。示例中 api 出现 3 次，去重词汇为 ['api', 'css', 'html', 'js']，重复词汇为 ['api', 'css']。",
+      "starter": "words = ['api', 'html', 'api', 'css', 'api', 'js', 'css']\ncount = {}\n# TODO: 遍历 words，用字典 count 统计词频（可用 count.get(word, 0) + 1）\nunique_sorted = []\n# TODO: 用集合去重后排序，得到 unique_sorted\nrepeated = []\n# TODO: 根据 count 找出出现次数大于 1 的词，排序后得到 repeated\nprint('api 出现次数:', count.get('api', 0))\nprint('排序后去重词汇:', unique_sorted)\nprint('重复词汇:', repeated)",
+      "expects": [
+        "api 出现次数: 3",
+        "重复词汇: ['api', 'css']"
+      ]
+    },
+    {
+      "title": "用字典分组用户动作并用集合去重",
+      "task": "给定 records，每个元素是 (用户, 动作) 元组。按用户分组，把动作放入集合并去重；输出时每个用户的动作用排序后的列表展示，同时找出执行过 login 的用户并排序。示例输出包含 alice: ['login', 'view'] 和 登录用户: ['alice', 'carol']。",
+      "starter": "records = [\n    ('alice', 'login'),\n    ('bob', 'view'),\n    ('alice', 'view'),\n    ('alice', 'login'),\n    ('bob', 'view'),\n    ('carol', 'login'),\n    ('bob', 'logout'),\n]\nuser_actions = {}\nfor user, action in records:\n    if user not in user_actions:\n        user_actions[user] = set()\n    # TODO: 补一行，把 action 加入 user_actions[user]\nlogin_set = set()\n# TODO: 遍历 records，把 action == 'login' 的用户加入 login_set\nlogin_users = sorted(login_set)\nprint('用户动作:')\nfor user in sorted(user_actions):\n    print(user + ':', sorted(user_actions[user]))\nprint('登录用户:', login_users)",
+      "expects": [
+        "alice: ['login', 'view']",
+        "登录用户: ['alice', 'carol']"
+      ]
+    },
+    {
+      "title": "用哈希集合寻找和为目标值的唯一元组数对",
+      "task": "给定整数列表 numbers 和目标值 target，用集合记录已遍历数字，找出所有不同的值对 (a, b)，满足 a + b = target；每个数对用元组保存，并放入集合去重。示例中 numbers = [3, 2, 4, 3, 5, 1, 6, 2]、target = 7 时，输出唯一数对 [(1, 6), (2, 5), (3, 4)] 和数量 3。",
+      "starter": "numbers = [3, 2, 4, 3, 5, 1, 6, 2]\ntarget = 7\nseen = set()\npairs = set()\nfor x in numbers:\n    need = target - x\n    found = need in seen\n    # TODO: 如果 found 为真，把 (need, x) 按从小到大组成元组并加入 pairs\n    seen.add(x)\nresult = sorted(pairs)\nprint('唯一数对:', result)\nprint('数对数量:', len(result))",
+      "expects": [
+        "唯一数对: [(1, 6), (2, 5), (3, 4)]",
+        "数对数量: 3"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_列表_字典_集合_元组_20261103_1647.json",
+  "weak_used": false
+}

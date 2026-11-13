@@ -4,12 +4,13 @@
 解题流程复用 core.workflow：思考->计划->审查->实现->测试（含泄漏检测）。
 """
 import json
+import time
 from pathlib import Path
 
-from core.config import outputs_dir
+from core.config import outputs_dir, data_dir
 from core import codecheck
 from core.workflow import Workflow, SYS_ENGINEER
-from core.llm import router
+from core.llm import router, tutorial_tier
 
 # ---------------- 内置题库（python 测试） ----------------
 # tests: [(args..., expected)]，函数签名统一在 signature 中
@@ -268,9 +269,47 @@ def solve(slug: str, log_fn=None) -> dict:
 
 
 def explain(slug: str) -> str:
-    """题解讲解：思路、复杂度、多解法对比。"""
+    """题解讲解：思路、复杂度、多解法对比。档位跟随教程配置（默认 fast）。
+    结果落盘 data/explain/<slug>.md，可回顾可追问。"""
     p = get_problem(slug)
     r = router()
-    return r.ask(f"""给出力扣题「{p['title']}」的题解讲解：{p['desc']}
+    text = r.ask(f"""给出力扣题「{p['title']}」的题解讲解：{p['desc']}
 包含：1) 思路推导 2) 推荐解法与代码(python) 3) 复杂度分析 4) 其他解法对比 5) 同类题拓展。""",
-                 system=SYS_ENGINEER, deep=True)
+                 system=SYS_ENGINEER, tier=tutorial_tier())
+    _save_explain(slug, text)
+    return text
+
+
+def _explain_file(slug: str) -> Path:
+    return data_dir() / "explain" / f"{slug}.md"
+
+
+def _save_explain(slug: str, text: str) -> None:
+    """讲解落盘（覆盖式保存：重新讲解只保留最新一份，追问以 Q/A 追加）。"""
+    f = _explain_file(slug)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(text, encoding="utf-8")
+
+
+def load_explain(slug: str) -> str:
+    """读取本地讲解（不存在返回空串）。"""
+    f = _explain_file(slug)
+    return f.read_text(encoding="utf-8") if f.exists() else ""
+
+
+def explain_followup(slug: str, question: str) -> str:
+    """基于本地已有讲解继续追问；回答与问题一起追加进本地文档。"""
+    ctx = load_explain(slug) or explain(slug)
+    r = router()
+    ans = r.ask(f"""以下是力扣题「{slug}」的题解讲解：
+{ctx[:6000]}
+
+学生追问：{question}
+请针对追问作答，简洁聚焦，必要时给代码示例。""",
+                system=SYS_ENGINEER, tier=tutorial_tier())
+    f = _explain_file(slug)
+    f.parent.mkdir(parents=True, exist_ok=True)
+    head = "" if f.exists() else ctx + "\n"
+    with open(f, "a", encoding="utf-8") as fp:
+        fp.write(f"{head}\n\n## ❓ 追问：{question}\n（{time.strftime('%Y-%m-%d %H:%M')}）\n\n{ans}\n")
+    return ans

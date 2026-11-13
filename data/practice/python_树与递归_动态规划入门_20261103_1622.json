@@ -1,0 +1,42 @@
+{
+  "lang": "python",
+  "topic": "树与递归、动态规划入门",
+  "items": [
+    {
+      "title": "树递归入门：统计叶子数与树高",
+      "task": "给定一棵二叉树的根节点 root，请用递归实现 count_leaves(root) 统计叶子节点数，并用 tree_height(root) 求树高；空节点高度记为 0，叶子节点高度记为 1。示例：下例树的叶子数为 3、高度为 4，程序应输出两行结果。",
+      "starter": "class TreeNode:\n    def __init__(self, val, left=None, right=None):\n        self.val = val\n        self.left = left\n        self.right = right\n\ndef count_leaves(node):\n    # TODO: 递归统计叶子节点数；空节点返回 0\n    return 0\n\ndef tree_height(node):\n    # TODO: 递归计算树高；空节点返回 0\n    return 0\n\nroot = TreeNode(1)\nroot.left = TreeNode(2)\nroot.left.left = TreeNode(4)\nroot.left.right = TreeNode(5)\nroot.right = TreeNode(3)\nroot.right.right = TreeNode(6)\nroot.right.right.left = TreeNode(7)\n\nprint(f'叶子数={count_leaves(root)}')\nprint(f'高度={tree_height(root)}')",
+      "expects": [
+        "叶子数=3",
+        "高度=4"
+      ]
+    },
+    {
+      "title": "树递归进阶：根到叶子的最大路径和",
+      "task": "给定二叉树的根节点 root，节点值可能为负整数，求所有从根节点到叶子节点的路径和中的最大值；空树路径和记为 0。请实现 max_root_leaf_sum(root)，可用内部递归函数返回从当前节点向下到某个叶子的最优路径和。示例：下例树的最大路径和为 27，程序输出一行结果。",
+      "starter": "class TreeNode:\n    def __init__(self, val, left=None, right=None):\n        self.val = val\n        self.left = left\n        self.right = right\n\ndef max_root_leaf_sum(root):\n    # TODO: 求根到叶子的最大路径和；空树返回 0\n    if root is None:\n        return 0\n    def dfs(node):\n        # TODO: 返回从 node 出发到其子树中某个叶子的最大路径和\n        return 0\n    return dfs(root)\n\nroot = TreeNode(5)\nroot.left = TreeNode(4)\nroot.left.left = TreeNode(11)\nroot.left.left.left = TreeNode(7)\nroot.left.left.right = TreeNode(2)\nroot.right = TreeNode(8)\nroot.right.left = TreeNode(13)\nroot.right.right = TreeNode(4)\nroot.right.right.right = TreeNode(1)\n\nprint(f'最大根叶路径和={max_root_leaf_sum(root)}')",
+      "expects": [
+        "最大根叶路径和=27"
+      ]
+    },
+    {
+      "title": "记忆化搜索与滚动 DP：爬楼梯",
+      "task": "楼梯有 n 阶，每次可走 1 阶或 2 阶，求到达第 n 阶的不同走法数；n=0 视为 1 种空走法。请分别实现 climb_memo(n) 的递归加字典缓存，以及 climb_dp(n) 的自底向上滚动变量。示例 n=10 时两种方法都得到 89，程序输出两行。",
+      "starter": "def climb_memo(n):\n    cache = {0: 1, 1: 1}\n    # TODO: 在 dfs 中先查 cache；若没有，则计算 dfs(k-1)+dfs(k-2) 并存入 cache\n    def dfs(k):\n        return 1\n    return dfs(n)\n\ndef climb_dp(n):\n    if n <= 1:\n        return 1\n    prev2 = 1\n    prev1 = 1\n    for i in range(2, n + 1):\n        # TODO: 设 current=prev2+prev1，再更新 prev2=prev1、prev1=current\n        current = 1\n        prev2 = prev1\n        prev1 = current\n    return prev1\n\nn = 10\nprint(f'memo({n})={climb_memo(n)}')\nprint(f'dp({n})={climb_dp(n)}')",
+      "expects": [
+        "memo(10)=89",
+        "dp(10)=89"
+      ]
+    },
+    {
+      "title": "一维 DP：0-1 背包最大价值",
+      "task": "给定每件物品的重量 weights、价值 values 和背包容量 capacity，每件物品最多选一次，求可装入物品的最大总价值。请用一维 dp 数组完成 knapsack_01，其中 dp[c] 表示容量 c 时的最大价值；内层容量必须从大到小遍历，避免同一物品被重复使用。示例中 weights=[2, 3, 4, 5]、values=[3, 4, 5, 6]、capacity=8 时最大价值为 10，程序输出一行结果。",
+      "starter": "def knapsack_01(weights, values, capacity):\n    dp = [0] * (capacity + 1)\n    for i in range(len(weights)):\n        w = weights[i]\n        v = values[i]\n        for c in range(capacity, w - 1, -1):\n            # TODO: 把下面这行替换为 dp[c] = max(dp[c], dp[c - w] + v)\n            dp[c] = dp[c]\n    return dp[capacity]\n\nweights = [2, 3, 4, 5]\nvalues = [3, 4, 5, 6]\ncapacity = 8\nprint(f'最大价值={knapsack_01(weights, values, capacity)}')",
+      "expects": [
+        "最大价值=10"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_树与递归_动态规划入门_20261103_1622.json",
+  "weak_used": false
+}

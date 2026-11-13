@@ -72,15 +72,177 @@
     "fix": "在函数开始处添加参数类型检查，例如 if not isinstance(nums, list): raise TypeError(\"nums must be a list\")"
   },
   {
-    "date": "2026-10-27",
-    "kind": "workflow",
-    "desc": "自动生成的测试脚手架期望值可能算错（如 two-sum 对 nums=[-1,-2,-3], target=-5 期望 [0,2]，正确应为 [1,2]），导致正确的解法被判失败且循环不收敛",
-    "fix": "断言失败时先核对 expected 与题目语义：矛盾则修脚手架而不是解法；工作流的测试驱动修复与轮间反馈均需携带该判定指引"
+    "date": "2026-10-08",
+    "kind": "leetcode",
+    "desc": "测试计划中声明覆盖 nums=None，但 solution.py 的 __main__ 自测用例未包含该用例，导致测试覆盖与验收描述不一致。",
+    "fix": "在 __main__ 的 test_cases 中增加 (None, 0, [])，或单独增加对 two_sum(None, 0) 的断言。"
   },
   {
-    "date": "2026-10-27",
+    "date": "2026-10-08",
+    "kind": "leetcode",
+    "desc": "计划未明确运行环境是本地测试还是力扣官方提交。若目标是力扣官方提交，当前 def two_sum(nums, target) 不符合官方 Python 模板，可能无法通过官方评测。",
+    "fix": "若需提交力扣，增加 class Solution: def twoSum(self, nums, target): return two_sum(nums, target)；若仅本地验收，则在计划中明确运行环境为本地自测。"
+  },
+  {
+    "date": "2026-10-08",
+    "kind": "leetcode",
+    "desc": "two_sum 仅对 nums is None 做了安全处理；若调用方传入非可迭代对象（如 int）或包含不可哈希/非数值元素，会在 enumerate(nums)、target - num 或 seen[num] = i 处抛出 TypeError。",
+    "fix": "如需增强健壮性，可在入口校验 nums 是否可迭代，并用 try/except TypeError 将非法输入统一返回 [] 或抛出明确异常；若严格依赖类型注解约束，可保持现状。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "步骤9声称用 AbortController 设置超时，但 AbortController 本身不直接提供超时计时，计划对实现方式表述不清，容易让实现者遗漏 setTimeout 与 abort 的配合或清理逻辑。",
+    "fix": "明确实现为：创建 AbortController，使用 setTimeout 在 5 秒后调用 controller.abort()，在 finally 中 clearTimeout 并做必要清理；或使用 AbortSignal.timeout(5000)（需说明浏览器兼容性）。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "全局 threading.Lock 串行化所有数据库操作会降低并发，但可接受；更关键的问题是未明确连接在多线程/测试并发下是否单连接共享。若单连接共享且 lock 粒度过大，性能差；若未来改动易引入竞争。",
+    "fix": "在 README/实现中明确采用单个全局连接 + lock 的简化方案，仅用于学习/单进程演示；或改为每请求/每线程连接并说明不引入连接池。保持范围不扩大，但需写明选择与原因。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "db.py 中 update_post 的 SQL 字符串在 WHERE 处截断，函数与类未闭合，属于语法错误，代码无法运行。",
+    "fix": "补全 UPDATE 语句（例如 WHERE id = ?）及后续返回、异常处理、close 等代码，确保文件语法完整。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "create_post 在 with self._lock 内调用 self.get_post，而 get_post 再次获取同一个非可重入 threading.Lock，会导致死锁，无法通过创建文章测试。",
+    "fix": "在 create_post 中不要调用会加锁的 get_post；可在同一锁内直接 SELECT 返回，或改用可重入锁/拆分内部无锁方法。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "可见代码未提供 Database.close 或上下文管理器，若最终实现缺失，测试要求“数据库连接被关闭”无法满足，并可能泄漏 SQLite 连接。",
+    "fix": "实现 close() 在锁内关闭连接并设置 _closed，所有方法检查 _closed；测试中调用 close 或使用 context manager。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "update_post 先无锁读取 existing，再加锁更新，存在 TOCTOU 竞态；并发更新时可能基于过期数据覆盖，且未检查 UPDATE 影响行数。",
+    "fix": "将读取和更新放入同一事务/同一锁内，或使用 UPDATE ... RETURNING/检查 rowcount，并在更新后重新读取返回。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "update_post 使用 None 表示字段不更新，无法区分“不传字段”和“显式将 content 更新为 null”，可能影响 PUT 边界语义。",
+    "fix": "使用哨兵值（如 UNSET）或接收 exclude_unset 后的字段集合，仅更新明确传入的字段。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "create_post 在插入后若 get_post 返回 None 会返回空 dict，掩盖插入/读取失败，可能导致 API 返回 201 但数据无效。",
+    "fix": "若无法读取刚插入记录应抛出异常或返回 None，由 API 层转为 500/503，而不是返回空 dict。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "Database.__init__ 创建连接后执行 _init_schema，如果建表失败，连接不会被关闭，存在异常路径资源泄漏。",
+    "fix": "在 __init__ 中使用 try/except，初始化失败时关闭连接并重新抛出异常。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "数据库方法未捕获 sqlite3.Error，例如 CHECK 约束失败或数据库锁定会直接冒泡，API 可能返回 500 而非预期 422/409。",
+    "fix": "在 API 层或 DB 层捕获 sqlite3.IntegrityError/OperationalError，映射为合适 HTTP 状态码。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "在 app/db.py 中使用 threading.Lock 保护写操作，但 FastAPI 同步路由在线程池执行导致 sqlite3 连接跨线程问题：每次请求创建独立连接，不共享连接对象。",
+    "fix": "确保每次请求使用独立的 sqlite3 连接，避免共享连接对象；使用锁保护同一连接内的操作。"
+  },
+  {
+    "date": "2026-10-17",
+    "kind": "project",
+    "desc": "在 app/db.py 中使用 threading.Lock 保护写操作，但 FastAPI 同步路由在线程池执行导致 sqlite3 连接跨线程问题：每次请求创建独立连接，不共享连接对象。",
+    "fix": "确保每次请求使用独立的 sqlite3 连接，避免共享连接对象；使用锁保护同一连接内的操作。"
+  },
+  {
+    "date": "2026-10-29",
     "kind": "general",
-    "desc": "测试用例中未覆盖所有边界条件，例如 nums 为单个元素的情况",
-    "fix": "添加测试用例，如 ([1], 2, [])"
+    "desc": "测试计划第 5 条'大量数据时性能，验证 O(1) 查找效率'未覆盖：_run_tests 仅含小规模正确性用例，无大数据量基准验证。",
+    "fix": "增加性能用例，例如构造 10^6 级数据测量 two_sum/dict 查找耗时，验证近似线性整体、单次查找 O(1) 量级。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "get 接口语义未定义：tests 中同时出现「remove 后 get 返回默认值」与「值为 None」用例，若 get(key) 在键不存在时返回 None，则值为 None 的键与不存在的键无法区分，且「值为 None」测试会假阳性通过，掩盖 API 设计缺陷",
+    "fix": "明确 get(key, default=None) 签名，或在实现与文档中规定用 contains 区分「键不存在」与「值为 None」；「值为 None」测试应同时断言 get 返回 None 且 contains 为 True"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "benchmark.py 计划在 10 万级数据下对比两数之和两种解法，暴力 O(n²) 纯 Python 需约 5×10^9 次内层操作，单次运行耗时可达数分钟至十几分钟，基准测试实际不可用且易被误判为卡死",
+    "fix": "暴力法改用 1 万级数据并注明按 O(n²) 外推的预估耗时，哈希表解法可保留 10 万级；或在文档明确标注暴力法预期运行时长"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "计划测试要求 get 返回默认值，但步骤中只列出魔法方法，未明确实现 get(key, default=None) 公开方法，可能导致实现遗漏或测试无法按描述执行。",
+    "fix": "在步骤中显式增加 get 方法：命中返回 value，未命中返回 default，默认 default=None；自测覆盖 get 命中、未命中、自定义默认值。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "链地址法同一桶可能包含多个不同 key，计划未明确查询和删除必须按 key 精确匹配，存在仅凭桶下标误取或误删的逻辑隐患。",
+    "fix": "在实现步骤中明确：定位桶后遍历桶内键值对，使用 == 比较 key；删除只移除匹配 key 的条目，未匹配则抛 KeyError。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "测试未明确覆盖删除后 __len__ 正确减少，虽然计划支持 __len__，但删除场景只说查询不到，可能遗漏 size 维护错误。",
+    "fix": "在删除测试中增加断言：删除前 len 为 n，删除存在键后 len 为 n-1；重复删除同一键第二次抛 KeyError 且 len 不变。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "迭代器安全边界只说“说明删除与迭代的安全边界”，但未规定迭代期间插入、删除或扩容时的行为；生成器若持有旧 buckets，可能导致遍历旧表、跳过新键或延长旧桶生命周期。",
+    "fix": "明确迭代语义：教学实现可规定迭代期间禁止修改表，若修改则行为未定义；更稳妥可维护版本计数，迭代中检测到插入/删除/扩容则抛 RuntimeError，并补充对应测试。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "hash_table.py 的 values() 方法体不完整：循环内只有未定义的 y，既没有 yield value，也没有返回生成器；调用 ht.values() 会 NameError，test_iteration 无法通过。",
+    "fix": "将 values() 补全为生成器：for bucket in self._buckets: for _, value in bucket: yield value。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "hash_table.py 缺少 items() 与 __repr__ 实现，但测试计划/测试代码调用 ht.items() 和 repr(ht) 并断言 repr 包含键值，当前会 AttributeError 或断言失败，无法通过 test_iteration/test_repr。",
+    "fix": "添加 items() 生成器 yield (key, value)；添加 __repr__ 返回包含 HashTable 及键值对的字符串。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "_resize() 通过 self[key] = value 复用 __setitem__，会再次执行负载因子检查，注释“不会再次触发扩容”不成立；当 load_factor 很小或容量很小时可能连续递归扩容，造成容量放大和递归深度增加。",
+    "fix": "在 _resize() 中直接对新桶执行插入（计算 idx 并 append），或提供不触发 resize 的内部插入方法。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "__iter__ 未对迭代期间的修改做保护，迭代中增删/扩容不会像 CPython dict 一样抛 RuntimeError，可能跳过键或产生不一致；文档声称与 CPython dict 行为一致也不成立。",
+    "fix": "增加 _version/_mod_count，在 __setitem__/__delitem__/__resize 中递增，迭代器每次 yield 前检查；或修正文档说明。"
+  },
+  {
+    "date": "2026-10-29",
+    "kind": "general",
+    "desc": "__init__ 允许 load_factor 任意接近 0，结合 _resize 复用 __setitem__ 可能导致为极小负载因子分配过大桶数组或 RecursionError/MemoryError。",
+    "fix": "为 load_factor 设置合理下限（例如 >= 0.1）或在参数校验中限制，并避免递归扩容。"
+  },
+  {
+    "date": "2026-10-30",
+    "kind": "leetcode",
+    "desc": "自测代码 _run_tests 在测试2处被截断（print 语句不完整），导致语法错误，无法运行内置测试验证计划中的边界用例。",
+    "fix": "补全 _run_tests 函数的剩余测试代码，确保所有计划中的测试用例完整执行并输出结果。"
+  },
+  {
+    "date": "2026-11-13",
+    "kind": "general",
+    "desc": "测试点4中提到nums = [0], target = 0，但题目保证有解，该测试点可能无法通过，建议调整测试用例或说明预期结果",
+    "fix": "修改测试点4为包含两个元素的数组，如nums = [0, 0], target = 0，确保符合题目约束"
   }
 ]

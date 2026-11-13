@@ -9,6 +9,7 @@
 """
 import ast
 import json
+import os
 import re
 import subprocess
 import sys
@@ -152,6 +153,11 @@ def run_python_code(code: str, func: str = None, args_spec: list = None,
     tc = cfg()["testing"]
     timeout = timeout or tc["timeout"]
     rounds = rounds or tc["leak_rounds"]
+    # 强制子进程输出 UTF-8，避免 Windows 上默认 GBK(cp936) 导致的乱码/解码错乱。
+    # 父进程用 bytes 捕获后统一按 UTF-8 解码，不再依赖 text=True 的 locale 编码。
+    env = dict(os.environ)
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
     with tempfile.TemporaryDirectory() as d:
         sol = Path(d) / "solution.py"
         sol.write_text(code, encoding="utf-8")
@@ -166,23 +172,28 @@ def run_python_code(code: str, func: str = None, args_spec: list = None,
         else:
             cmd = [PY, str(sol)]
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
-                               encoding="utf-8", errors="replace", cwd=d)
+            r = subprocess.run(cmd, capture_output=True, timeout=timeout,
+                               env=env, cwd=d)
         except subprocess.TimeoutExpired:
             return {"ok": False, "output": "", "error": f"执行超时(>{timeout}s)，疑似死循环或超时逻辑",
                     "leak": None}
-        out = (r.stdout or "") + (("\n[stderr] " + r.stderr) if r.stderr.strip() else "")
+        out_bytes = (r.stdout or b"") + (("\n[stderr] ".encode("utf-8") + r.stderr)
+                                          if (r.stderr or b"").strip() else b"")
+        out = out_bytes.decode("utf-8", errors="replace")
         res = {"ok": r.returncode == 0, "output": out[-4000:], "error": None,
                "leak": None}
         if func and r.returncode == 0:
-            for line in reversed(r.stdout.strip().splitlines()):
+            for line in reversed(out.splitlines()):
                 line = line.strip()
                 if line.startswith("{"):
-                    res["leak"] = json.loads(line)
+                    try:
+                        res["leak"] = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
                     break
             res["ok"] = True
         elif func:
-            res["error"] = (r.stderr or r.stdout)[-1500:]
+            res["error"] = out[-1500:]
         return res
 
 

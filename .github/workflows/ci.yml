@@ -26,3 +26,7 @@ jobs:
       - name: Run unit tests
         # 集成测试自动跳过：Ollama 未运行 / MySQL 不可用时相关用例自行 skip
         run: python -m unittest discover tests -v
+      - name: Frontend render regression (Node)
+        run: |
+          node tests/lab_check.js
+          node tests/explain_render_check.js

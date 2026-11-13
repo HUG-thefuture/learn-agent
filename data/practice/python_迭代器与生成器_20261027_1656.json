@@ -1,0 +1,43 @@
+{
+  "lang": "python",
+  "topic": "迭代器与生成器",
+  "items": [
+    {
+      "title": "用生成器函数按需产出平方数",
+      "task": "编写生成器函数 squares(n)，依次产出 1 到 n 的平方数。调用它并打印每个值，最后打印所有平方数的和。示例：输入 n=4，输出依次为 1、4、9、16，和为 30。",
+      "starter": "def squares(n):\n    # TODO: 使用 yield 依次产出 1 到 n 的平方数\n    pass\n\nn = 4\ntotal = 0\nfor value in squares(n):\n    print(value)\n    total += value\nprint(\"sum =\", total)\n",
+      "expects": [
+        "16",
+        "sum = 30"
+      ]
+    },
+    {
+      "title": "用生成器表达式筛选偶数并转成列表",
+      "task": "给定列表 nums，使用生成器表达式筛选出其中的偶数，再通过 list() 转成列表并打印。示例：nums = [1, 2, 3, 4, 5, 6]，输出 [2, 4, 6]。",
+      "starter": "nums = [1, 2, 3, 4, 5, 6]\n\n# TODO: 用生成器表达式筛选偶数，并转成列表\neven_list = None\n\nprint(even_list)\n",
+      "expects": [
+        "[2, 4, 6]"
+      ]
+    },
+    {
+      "title": "自定义迭代器类遍历倒计时",
+      "task": "定义一个 Countdown 类，接收起始整数 start，实现 __iter__ 和 __next__，使对象可以被 for 循环从 start 递减遍历到 1，到 0 时抛出 StopIteration。示例：start=3，输出 3、2、1。",
+      "starter": "class Countdown:\n    def __init__(self, start):\n        self.current = start\n\n    def __iter__(self):\n        # TODO: 返回迭代器对象本身\n        pass\n\n    def __next__(self):\n        # TODO: 若 current <= 0 抛出 StopIteration；否则返回 current 并减 1\n        pass\n\nfor num in Countdown(3):\n    print(num)\n",
+      "expects": [
+        "3",
+        "1"
+      ]
+    },
+    {
+      "title": "用生成器实现斐波那契数列并限制个数",
+      "task": "编写生成器函数 fib(count)，依次产出斐波那契数列的前 count 项（从 1, 1 开始）。用 for 循环打印每一项，并统计项数。示例：count=6，输出 1、1、2、3、5、8，项数为 6。",
+      "starter": "def fib(count):\n    # TODO: 使用 yield 产出前 count 项斐波那契数\n    pass\n\ncount = 6\nitems = 0\nfor value in fib(count):\n    print(value)\n    items += 1\nprint(\"count =\", items)\n",
+      "expects": [
+        "8",
+        "count = 6"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_迭代器与生成器_20261027_1656.json",
+  "weak_used": false
+}

@@ -1,0 +1,44 @@
+{
+  "lang": "python",
+  "topic": "字符串与格式化",
+  "items": [
+    {
+      "title": "用 f-string 与 format() 生成个人介绍",
+      "task": "给定姓名、年龄、城市和分数，分别使用 f-string 和 format() 生成两句介绍；第一句包含姓名、年龄、城市，第二句把分数格式化为两位小数。示例输入 name='小明', age=20, city='北京', score=95.5，应输出 '我叫小明，今年20岁，来自北京' 和 '总分: 95.50'。",
+      "starter": "name = '小明'\nage = 20\ncity = '北京'\nscore = 95.5\n\n# TODO: 使用 f-string 生成 profile，格式为：我叫{name}，今年{age}岁，来自{city}\nprofile = ''\n\n# TODO: 使用 format() 生成 score_line，格式为：总分: {score:.2f}\nscore_line = ''\n\nprint(profile)\nprint(score_line)",
+      "expects": [
+        "我叫小明，今年20岁，来自北京",
+        "总分: 95.50"
+      ]
+    },
+    {
+      "title": "拆分、清洗并去重标签",
+      "task": "给定逗号分隔的原始标签字符串，按逗号拆分，去掉每项首尾空格，统一转小写，并去除空项与重复项（保留首次出现顺序）。最后用 ' | ' 连接输出一行，并输出标签数量。示例输入 raw_tags=' Python, 字符串 ,格式化,python , SQL '，应输出 '标签: python | 字符串 | 格式化 | sql' 和 '标签数量: 4'。",
+      "starter": "raw_tags = ' Python, 字符串 ,格式化,python , SQL '\nnormalized = []\n\nfor part in raw_tags.split(','):\n    token = ''  # TODO: 对 part 使用 strip() 去首尾空格，再用 lower() 转小写\n    if token != '' and token not in normalized:\n        normalized.append(token)\n\ntag_line = '标签: ' + ' | '.join(normalized)\ncount_line = f'标签数量: {len(normalized)}'\nprint(tag_line)\nprint(count_line)",
+      "expects": [
+        "标签: python | 字符串 | 格式化 | sql",
+        "标签数量: 4"
+      ]
+    },
+    {
+      "title": "格式化商品小票并计算总计",
+      "task": "给定商品列表（名称、数量、单价），遍历计算每项小计并累加总计；每行按字段输出：名称、数量右对齐宽度3、单价和小计右对齐宽度6和7并保留两位小数。示例输入 [('苹果', 3, 5.5), ('香蕉', 12, 2.0), ('牛奶', 2, 12.25)]，输出中某行应为 '苹果 数量=  3 单价=  5.50 小计=  16.50'，最后输出 '总计: 65.00'。",
+      "starter": "items = [\n    ('苹果', 3, 5.5),\n    ('香蕉', 12, 2.0),\n    ('牛奶', 2, 12.25),\n]\ntotal = 0.0\n\nfor name, qty, price in items:\n    amount = 0.0  # TODO: 用 qty * price 计算小计\n    total = total + amount\n    print(f'{name} 数量={qty:>3d} 单价={price:>6.2f} 小计={amount:>7.2f}')\n\nprint(f'总计: {total:.2f}')",
+      "expects": [
+        "苹果 数量=  3 单价=  5.50 小计=  16.50",
+        "总计: 65.00"
+      ]
+    },
+    {
+      "title": "解析日志并格式化截断摘要",
+      "task": "给定若干条 '级别:日期:消息' 格式的日志字符串和最大显示长度 max_len，按行解析出级别、日期和消息；若消息长度超过 max_len，则截取前 max_len 个字符并追加三个点，否则保留原消息。同时统计各级别出现次数，按首次出现顺序生成汇总行。示例输出中应包含 '3. [ERROR] 2024-05-02 磁盘空间严重不足...' 和 '汇总: ERROR=2, INFO=1'。",
+      "starter": "logs = [\n    'ERROR:2024-05-01:数据库连接失败',\n    'INFO:2024-05-01:用户登录成功',\n    'ERROR:2024-05-02:磁盘空间严重不足需要清理',\n]\nmax_len = 8\nlines = []\nlevel_counts = {}\n\nidx = 1\nfor raw in logs:\n    parts = raw.split(':', 2)\n    level = parts[0]\n    date = parts[1]\n    message = parts[2]\n    short_message = ''  # TODO: 长度超过 max_len 时取 message[:max_len] + '...'，否则使用 message\n    level_counts[level] = level_counts.get(level, 0) + 0  # TODO: 将 +0 改为正确的计数 +1\n    lines.append(f'{idx}. [{level}] {date} {short_message}')\n    idx += 1\n\nsummary_parts = []\nfor level in level_counts:\n    summary_parts.append(f'{level}={level_counts[level]}')\nsummary = ', '.join(summary_parts)\n\nfor line in lines:\n    print(line)\nprint('汇总: ' + summary)",
+      "expects": [
+        "3. [ERROR] 2024-05-02 磁盘空间严重不足...",
+        "汇总: ERROR=2, INFO=1"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_字符串与格式化_20261103_1626.json",
+  "weak_used": false
+}

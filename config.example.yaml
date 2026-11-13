@@ -1,50 +1,226 @@
 # ============================================================
-# Learn-Agent 配置模板
-# 使用：复制本文件为 config.yaml 再按需修改 —— config.yaml 含本机
-# 凭据，已被 .gitignore 忽略，切勿提交。未创建 config.yaml 时程序
-# 会自动回退读取本模板（即可开箱运行）。
+# Learn-Agent 配置模板（脱敏版）
+#
+# 使用：复制为 config.yaml 后按需填写。config.yaml 含你的 API Key /
+# 数据库密码，已被 .gitignore 忽略，切勿提交。
+# 不创建 config.yaml 时程序会自动回退读取本模板，克隆即可运行。
+#
+# 云端模型：把 cloud.enabled 改为 true 并在 models 里填自己的 Key；
+#           若本机装有 DeepSeek Harness，网关通道会自动发现，无需填 Key。
+# 查看当前模型池：python main.py modelpool
 # ============================================================
 
 project:
   name: learn-agent
   data_dir: data
   outputs_dir: data/outputs
-
 local_model:
   provider: ollama
   base_url: http://localhost:11434
-  fast_model: qwen3:8b        # 快速：聊天/学习/简单生成
-  deep_model: qwen3:14b       # 深度：思考/规划/审查/写代码
+  fast_model: qwen3:8b
+  deep_model: qwen3:14b
   num_ctx: 8192
   temperature: 0.3
-  think: false                # qwen3 思考模式总开关；深度环节会自动临时打开
-
-external_model:               # OpenAI 兼容接口，用于能力增强（复杂审查/高质量蒸馏）
-  enabled: false              # 拿到 Key 后改为 true 即自动启用
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  # 阿里云百炼示例 Key 形如 sk-xxx；也可换 deepseek: https://api.deepseek.com/v1
-  api_key: "sk-在此填入你的KEY"
-  model: qwen-plus
-  timeout: 60
-
+  think: false
+  timeout: 120
 escalation:
-  max_loop_rounds: 3          # 思考→计划→审查→开发→测试 循环上限
-  escalate_after_failures: 2  # 连续失败 N 次后升级到外部模型(或深度+思考模式)
-  review_block_on: high       # high 严重度问题会打回重做；medium/low 仅记录
-
+  max_loop_rounds: 3
+  escalate_after_failures: 2
+  review_block_on: high
 web:
-  search_enabled: true        # 网络数据检索（学习资料/题解参考）
+  search_enabled: true
   timeout: 10
   max_chars: 6000
-
-database:                     # 本地 MySQL/MariaDB（Agent 的数据库工具与 SQL 学习用）
+database:
   host: 127.0.0.1
   port: 3306
   user: root
-  password: "change-me"       # ← 真实密码只填在 config.yaml，不要写进任何入库文件
-  max_rows: 50                # 查询结果最多返回行数
-
+  password: "change-me"
+  max_rows: 50
 testing:
-  timeout: 12                 # 单次运行测试的超时(秒)
-  leak_rounds: 300            # 内存泄漏检测：重复调用次数
-  leak_growth_bytes: 20480    # 判定泄漏的堆内存增长阈值(字节)
+  timeout: 12
+  leak_rounds: 300
+  leak_growth_bytes: 20480
+cloud:
+  enabled: false
+  cloud_first: false
+  # 教程/讲解类长文生成档位：fast=快档优先（1-3 分钟级）；strong=质量优先。
+  # capstone 进阶实战项目不受此开关影响，始终走 strong 工作流。
+  tutorial_tier: fast
+  # 调用顺序策略（代码见 core/llm.py::_order_cloud）：
+  #   每次调用前按历史表现重排——可用性优先（成功率+新近成功），同分时按实测耗时
+  #   （EMA）快的优先；从未调用的保持下面配置顺序；只失败过的沉底。
+  #   画像持久化在 data/memory/llm_channels.json（7 天过期），重启后不必从零试错。
+  #   查看实际顺序：python main.py modelpool [--probe|--clear]
+  models:
+  # ---- strong 档（下面只决定「同等情况下的初始顺序」；实际调用顺序按可用性动态重排；
+  #      商汤系受 5h 限额窗口约束，命中限额自动挂起换通道）----
+  - name: Qwen3.8-27B(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: Qwen3.8-27B
+    tier: strong
+    timeout: 600
+  - name: Kimi-K3(商汤)
+    provider: sensetime
+    base_url: https://token.sensenova.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: kimi-k3
+    tier: strong
+    timeout: 300
+    quota_cooldown: 18000
+    extra:
+      temperature: 1
+  - name: Qwen3.8-Flash-Next(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: Qwen3.8-Flash-Next
+    tier: strong
+    timeout: 600
+  - name: DeepSeek-V4-Pro(商汤)
+    provider: sensetime
+    base_url: https://token.sensenova.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: deepseek-v4-pro
+    tier: strong
+    timeout: 300
+    quota_cooldown: 18000
+    extra:
+      temperature: 1
+    # 2026-10-30 实测：商汤端已下线该模型（HTTP 404），保留条目作历史记录，
+    # 停用以避免每次调用浪费一次重试（商汤现役列表见其 /v1/models）。
+    enabled: false
+  - name: GLM-5.2(商汤)
+    provider: sensetime
+    base_url: https://token.sensenova.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: glm-5.2
+    tier: strong
+    timeout: 300
+    # 商汤限额是 5h 滚动窗口：命中 429/限额类失败时挂起该通道 5h（模型没坏，只是节奏）
+    quota_cooldown: 18000
+    extra:
+      temperature: 1
+  - name: Nemotron-3-Ultra-550B(Nvidia)
+    provider: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: "***在此填入你的KEY***"
+    model: nvidia/nemotron-3-ultra-550b-a55b
+    tier: strong
+    timeout: 300
+  - name: GLM-5.3(Nvidia)
+    provider: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: "***在此填入你的KEY***"
+    model: z-ai/glm-5.3
+    tier: strong
+    timeout: 600
+    # 2026-10-30 实测：Nvidia 端已下线该模型（HTTP 410 Gone），仅剩 glm-5.3-flash。
+    enabled: false
+  # ---- DSH 账号通道（workbuddy-cn / qoder / cline 等）不在此逐条声明 ----
+  # 它们由 core/llm.py::_dsh_gateway_entries() 从网关 /v1/models 自动发现
+  # （凭据取自 ~/.dsh/openai-gateway/api-key），新增/下线模型无需改这里。
+  # 查看当前自动发现的通道：python main.py modelpool
+  # 2026-10-30 实测该通道含 claude-opus-5.5 / gpt-6.1-sol / kimi-k3.1-pro 等旗舰模型。
+  # ---- fast 档（排序即调用优先级：Nvidia 端点实测响应稳 → AMD 其后，小参数模型垫底）----
+  - name: GLM-5.3-Flash(Nvidia)
+    provider: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: "***在此填入你的KEY***"
+    model: z-ai/glm-5.3-flash
+    tier: fast
+    timeout: 420
+    # 该端点在 json 模式下会先烧 token 出思考链；关思考后即时返回干净 JSON
+    json_extra:
+      chat_template_kwargs:
+        enable_thinking: false
+  - name: DeepSeek-V4.1-Flash(Nvidia)
+    provider: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: "***在此填入你的KEY***"
+    model: deepseek-ai/deepseek-v4.1-flash
+    tier: fast
+    timeout: 300
+  - name: GLM-5.3-Flash(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: GLM-5.3-Flash
+    tier: fast
+    timeout: 300
+  - name: DeepSeek-V4-Flash(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: DeepSeek-V4-Flash
+    tier: fast
+    timeout: 300
+  - name: MiniCPM5-2B(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: MiniCPM5-2B
+    tier: fast
+    timeout: 180
+  - name: MiMo-V2.6-Flash(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: MiMo-V2.6-Flash
+    tier: fast
+    timeout: 300
+  - name: DeepSeek-V4.1-Flash(AMD)
+    provider: amd
+    base_url: https://developer.amd.com.cn/radeon/api/v1
+    api_key: "***在此填入你的KEY***"
+    model: DeepSeek-V4.1-Flash
+    tier: fast
+    timeout: 300
+  - name: GPT-OSS-20B(Nvidia)
+    provider: nvidia
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key: "***在此填入你的KEY***"
+    model: openai/gpt-oss-20b
+    tier: fast
+    timeout: 300
+  - name: SenseNova-6.8-Flash-Lite(商汤)
+    provider: sensetime
+    base_url: https://token.sensenova.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: sensenova-6.8-flash-lite
+    tier: fast
+    timeout: 300
+    quota_cooldown: 18000
+    extra:
+      temperature: 1
+  # ---- 免费 Qwen 通道模板：已登录账号即可，填 token 后删除 enabled: false 行即接入 ----
+  # 魔搭 ModelScope API-Inference：登录 modelscope.cn → 头像 → 访问令牌(ACCESS_TOKEN)
+  # 个人账号免费额度按日重置（额度见个人主页「资源/额度」）。OpenAI 兼容端点，无需信用卡。
+  - name: Qwen3-8B(魔搭免费)
+    provider: modelscope
+    base_url: https://api-inference.modelscope.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: Qwen/Qwen3-8B
+    tier: fast
+    timeout: 300
+    enabled: false
+  - name: Qwen3-235B(魔搭免费)
+    provider: modelscope
+    base_url: https://api-inference.modelscope.cn/v1
+    api_key: "***在此填入你的KEY***"
+    model: Qwen/Qwen3-235B-A22B-Instruct-2507
+    tier: strong
+    timeout: 600
+    enabled: false
+  # 阿里云百炼 DashScope OpenAI 兼容模式：bailian.console.aliyun.com → API-KEY
+  # 新用户每款模型送免费 token 额度（qwen flash 系列速度快，适合教程生成）。
+  - name: Qwen3.8-Flash(百炼)
+    provider: dashscope
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+    api_key: "***在此填入你的KEY***"
+    model: qwen3.8-flash
+    tier: fast
+    timeout: 300
+    enabled: false

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>learn-agent 编程学习助手</title>
 <style>
-  :root { --bg:#0f1420; --panel:#1a2233; --line:#2a3450; --fg:#e8edf7; --dim:#93a0bd; --acc:#5b9dff; --ok:#3ecf8e; --bad:#ff6b6b; }
+  :root { --bg:#0f1420; --panel:#1a2233; --line:#2a3450; --fg:#e8edf7; --dim:#93a0bd; --acc:#5b9dff; --ok:#3ecf8e; --bad:#ff6b6b; --warn:#f7c948; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg); font-family:"Microsoft YaHei",system-ui,sans-serif; }
   header { padding:14px 22px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:14px; }
@@ -14,7 +14,7 @@
   nav { display:flex; gap:4px; padding:10px 22px 0; }
   nav button { background:none; border:1px solid transparent; border-bottom:none; color:var(--dim); padding:8px 16px; cursor:pointer; font-size:14px; border-radius:8px 8px 0 0; }
   nav button.active { color:var(--fg); border-color:var(--line); background:var(--panel); }
-  main { padding:18px 22px; max-width:980px; margin:0 auto; }
+  main { padding:18px 22px; max-width:1280px; margin:0 auto; }
   .panel { display:none; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; min-height:420px; }
   .panel.active { display:block; }
   .row { display:flex; gap:8px; margin:8px 0; }
@@ -25,6 +25,7 @@
   .me { color:var(--acc); margin:6px 0 2px; font-weight:bold; }
   .bot { white-space:pre-wrap; margin:2px 0 14px; line-height:1.6; }
   .job { border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:10px 0; }
+  .job summary { cursor:pointer; } .job[open] summary { margin-bottom:8px; }
   .job .st-running { color:#f7c948; } .job .st-done { color:var(--ok); }
   pre.result { background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:10px; white-space:pre-wrap; font-size:13px; max-height:320px; overflow:auto; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
@@ -32,12 +33,83 @@
   .pill { display:inline-block; background:#0d1220; border:1px solid var(--line); border-radius:20px; padding:2px 10px; margin:2px; font-size:12px; color:var(--dim); cursor:pointer; }
   .stat { color:var(--dim); font-size:13px; margin:6px 0; }
   .ok { color:var(--ok); } .bad { color:var(--bad); }
+  /* 云端优先开关 */
+  .cloud-toggle { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--fg); cursor:pointer;
+    background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:6px 12px; user-select:none; }
+  .cloud-toggle input { accent-color:var(--acc); width:15px; height:15px; }
+  .cloud-toggle.on { border-color:var(--acc); color:#bcdcff; }
+  #cloud-info { color:var(--dim); font-size:12px; }
+  /* 力扣代码编辑器：加宽 + 加高 + 可拖拽 */
+  #lc-code { width:100%; min-height:600px; resize:vertical; font-size:14px; line-height:1.6;
+    font-family:Consolas,Monaco,'Courier New',monospace; }
+  #lc-desc { max-height:240px; }
+  .lc-modelbar { color:var(--dim); font-size:12px; margin:6px 0 10px; }
+  .lc-modelbar b { color:var(--acc); }
+  /* 任务区：固定高度内部滚动，长内容不把页面撑高 → 滚动位置稳定 */
+  #learn-jobs, #lc-jobs, #task-jobs { max-height:560px; overflow-y:auto; }
+  #learn-jobs .result, #lc-jobs .result, #task-jobs .result { max-height:none; }
+  /* 学习页签的按钮操作行 */
+  #p-learn .row { flex-wrap:wrap; }
+  /* 力扣页：左侧讲解目录 + 右侧主区 */
+  .lc-layout { display:flex; gap:16px; align-items:flex-start; }
+  .lc-toc { width:250px; flex:0 0 250px; position:sticky; top:12px;
+    background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:10px;
+    max-height:calc(100vh - 150px); display:flex; flex-direction:column; }
+  .lc-toc-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .lc-toc-list { overflow-y:auto; flex:1; margin-top:4px; }
+  .lc-toc-item { padding:5px 7px; border-radius:6px; cursor:pointer; font-size:13px;
+    color:var(--dim); display:flex; gap:6px; align-items:baseline; }
+  .lc-toc-item:hover { background:#1a2233; color:var(--fg); }
+  .lc-toc-item.active { background:#22304a; color:var(--fg); }
+  .lc-toc-item .dot { color:var(--ok); flex:0 0 auto; }
+  .lc-toc-item .dot.no { color:#4a5878; }
+  .lc-toc-item .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lc-toc-group { font-size:12px; color:#6b7a99; margin:8px 0 2px; padding-left:4px; }
+  .lc-main { flex:1; min-width:0; }
+  @media (max-width: 900px) { .lc-layout { flex-direction:column; } .lc-toc { width:100%; flex:none; position:static; max-height:260px; } }
+  /* 语言学习页：左侧课程目录 + 右侧内容 */
+  .learn-layout { display:flex; gap:16px; align-items:flex-start; margin-top:8px; }
+  .learn-toc { width:260px; flex:0 0 260px; position:sticky; top:12px;
+    background:#0d1220; border:1px solid var(--line); border-radius:8px; padding:10px;
+    max-height:calc(100vh - 200px); display:flex; flex-direction:column; }
+  .learn-toc-head { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+  .learn-toc-progress { font-size:12px; color:var(--dim); margin:4px 0; }
+  .learn-toc-progress .bar { height:5px; background:#1a2233; border-radius:3px; overflow:hidden; margin-top:3px; }
+  .learn-toc-progress .bar > i { display:block; height:100%; background:var(--ok); }
+  .learn-toc-list { overflow-y:auto; flex:1; margin-top:4px; }
+  .learn-stage { margin-bottom:4px; }
+  .learn-stage > summary { cursor:pointer; font-size:13px; color:#bcdcff; padding:4px 2px;
+    list-style:none; display:flex; justify-content:space-between; }
+  .learn-stage > summary::-webkit-details-marker { display:none; }
+  .learn-stage > summary:hover { color:var(--fg); }
+  .learn-stage > summary .cnt { color:var(--dim); font-size:12px; }
+  .learn-toc-item { padding:4px 6px 4px 14px; border-radius:5px; cursor:pointer; font-size:13px;
+    color:var(--dim); display:flex; gap:5px; align-items:baseline; }
+  .learn-toc-item:hover { background:#1a2233; color:var(--fg); }
+  .learn-toc-item.active { background:#22304a; color:var(--fg); }
+  .learn-toc-item .dot { flex:0 0 auto; color:var(--ok); }
+  .learn-toc-item .dot.no { color:#4a5878; }
+  .learn-toc-item .t { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .learn-toc-item .nf { font-size:11px; color:#586a8a; flex:0 0 auto; }
+  .learn-toc-item .prac-badge { color:var(--warn); cursor:pointer; padding:0 3px; border-radius:4px; }
+  .learn-toc-item .prac-badge:hover { background:#2a3450; }
+  .learn-main { flex:1; min-width:0; }
+  /* 历史练习列表 */
+  .prac-group { margin:10px 0; }
+  .prac-group-head { font-size:13px; color:#bcdcff; padding:4px 0; border-bottom:1px solid var(--line); }
+  .prac-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:5px 0 5px 10px; }
+  .prac-row .stat { margin:0; }
+  @media (max-width: 900px) { .learn-layout { flex-direction:column; } .learn-toc { width:100%; flex:none; position:static; max-height:300px; } }
 </style>
 </head>
 <body>
 <header>
   <h1>learn-agent</h1>
   <span class="meta" id="status">加载中…</span>
+  <label class="cloud-toggle" id="cloud-toggle" title="开启后：所有任务先走云端大模型（按难度自动选 strong/fast 档），本地 Ollama 作兜底。关闭则本地优先、本地超时降级到云端。">
+    <input type="checkbox" id="cloud-first" onchange="toggleCloudFirst()"> ☁ 云端优先
+  </label>
+  <span class="meta" id="cloud-info"></span>
 </header>
 <nav>
   <button data-p="chat" class="active">对话</button>
@@ -45,6 +117,7 @@
   <button data-p="learn">语言学习</button>
   <button data-p="lc">力扣刷题</button>
   <button data-p="kb">知识库</button>
+  <button data-p="train">训练</button>
 </nav>
 <main>
   <!-- 对话 -->
@@ -69,22 +142,95 @@
 
   <!-- 学习 -->
   <section id="p-learn" class="panel">
-    <p class="stat">七门语言分阶段路径（L0零基础→L6算法）。学习自动沉淀知识库（学习即训练），学完可进阶实战。</p>
+    <p class="stat">强化学习闭环：📖 学习 → 🎯 练习（改代码点▶运行判题）→ 错题自动记入薄弱点 → 🧠 智能复习（针对薄弱点）→ 🔁 再练薄弱 → 全部通过后学下一课 / 进阶实战。学习即沉淀知识库。</p>
     <div class="row">
-      <select id="learn-lang" style="max-width:160px"></select>
+      <select id="learn-lang" style="max-width:160px" onchange="loadCourseToc()"></select>
       <input id="learn-topic" placeholder="主题（留空=引导式学下一课）">
       <button class="go" onclick="runLearn(false)">学习</button>
       <button class="go" onclick="showPath()">路径</button>
       <button class="go" onclick="runLearn(true)">进阶实战</button>
+      <button class="go" onclick="runPractice(false)">🎯 练习</button>
+      <button class="go" onclick="runPractice(true)">🔁 再练薄弱</button>
+      <button class="go" style="background:#2a3450;" onclick="showPracticeList()">📋 历史练习</button>
+      <button class="go" onclick="runReview()">🧠 智能复习</button>
+      <button class="go" style="background:#2a3450;" onclick="showHistory()">📚 回顾已学内容</button>
+      <button class="go" style="background:#2a3450;" onclick="goHome()">🏠 返回首页</button>
     </div>
-    <div id="learn-jobs"></div>
+    <div class="learn-layout">
+      <!-- 侧边栏课程目录：按阶段折叠，已学打勾，点一下直接跳到该课教程 -->
+      <aside id="learn-toc" class="learn-toc">
+        <div class="learn-toc-head">
+          <b id="learn-toc-title">📑 课程目录</b>
+          <button class="go" style="background:#2a3450;padding:3px 8px;font-size:12px;"
+                  onclick="loadCourseToc()">刷新</button>
+        </div>
+        <div class="learn-toc-progress" id="learn-toc-progress"></div>
+        <input id="learn-toc-q" placeholder="筛选课程…" oninput="renderCourseToc()"
+               style="width:100%;margin:6px 0;padding:6px 9px;font-size:13px;">
+        <div id="learn-toc-list" class="learn-toc-list"><span class="stat">加载中…</span></div>
+      </aside>
+      <!-- 右侧主区 -->
+      <div class="learn-main">
+        <div id="learn-path" style="display:none; margin-top:10px;"></div>
+        <div id="learn-history" style="display:none; margin-top:10px;"></div>
+        <div id="learn-practices" style="display:none; margin-top:10px;"></div>
+        <div id="learn-course-view" style="display:none; margin-top:10px;"></div>
+        <div id="learn-jobs"></div>
+      </div>
+    </div>
   </section>
 
   <!-- 力扣 -->
   <section id="p-lc" class="panel">
-    <p class="stat">解题走完整工作流，并用内置测试 + 内存泄漏检测判题。</p>
-    <div id="lc-list"></div>
-    <div id="lc-jobs"></div>
+    <p class="stat">学习路径：先<b>动手写</b>解法 → <b>提交判题</b>（内置用例逐条验证+内存检测）→ 卡住看<b>讲解</b>（思路/复杂度/多解法）→ <b>AI示范</b>为参考答案。</p>
+    <div class="lc-layout">
+      <!-- 左侧讲解目录：已保存的本地讲解一览，点标题直接跳转查看 -->
+      <aside id="lc-toc" class="lc-toc">
+        <div class="lc-toc-head">
+          <b>📖 讲解目录</b>
+          <button class="go" style="background:#2a3450;padding:3px 8px;font-size:12px;"
+                  onclick="loadExplainToc()">刷新</button>
+        </div>
+        <input id="lc-toc-q" placeholder="筛选题目…" oninput="filterExplainToc()"
+               style="width:100%;margin:6px 0;padding:6px 9px;font-size:13px;">
+        <div id="lc-toc-list" class="lc-toc-list"><span class="stat">加载中…</span></div>
+      </aside>
+      <!-- 右侧主区 -->
+      <div class="lc-main">
+        <div id="lc-list"></div>
+        <div id="lc-editor" style="display:none; margin-top:14px; border-top:1px solid var(--line); padding-top:14px;">
+          <div class="row" style="align-items:baseline; flex-wrap:wrap;">
+            <b id="lc-title" style="font-size:15px;"></b>
+            <span id="lc-diff" class="pill"></span>
+            <button class="go" style="margin-left:auto; background:#2a3450;" onclick="closeEditor()">← 返回题目列表</button>
+          </div>
+          <div class="lc-modelbar" id="lc-modelbar"></div>
+          <pre id="lc-desc" class="result" style="max-height:200px;"></pre>
+          <textarea id="lc-code" rows="16" spellcheck="false"
+            placeholder="在此写你的解法（函数签名已预填，可直接修改；Tab 缩进）…"
+            style="font-family:Consolas,Monaco,'Courier New',monospace; font-size:13px; tab-size:4; line-height:1.5; white-space:pre;"></textarea>
+          <div class="row" style="flex-wrap:wrap;">
+            <button class="go" onclick="judgeCode()">提交判题</button>
+            <button class="go" onclick="explainBySlug(null)" id="lc-explain-btn">看讲解</button>
+            <span id="lc-judge-status" class="stat"></span>
+          </div>
+          <div id="lc-result"></div>
+          <div id="lc-explain" style="margin-top:12px; border-top:1px dashed var(--line); padding-top:10px;">
+            <div class="row" style="align-items:baseline; flex-wrap:wrap;">
+              <b style="font-size:14px;">本地讲解</b>
+              <span class="stat" id="lc-explain-state"></span>
+            </div>
+            <div id="lc-explain-content"></div>
+            <div class="row" style="margin-top:6px; flex-wrap:wrap;">
+              <input id="lc-followup" placeholder="对讲解有疑问？输入追问，如：为什么哈希表要先查后存？"
+                     style="flex:1; min-width:220px;">
+              <button class="go" onclick="askFollowup()">追问</button>
+            </div>
+          </div>
+        </div>
+        <div id="lc-jobs"></div>
+      </div>
+    </div>
   </section>
 
   <!-- 知识库 -->
@@ -94,6 +240,23 @@
       <button class="go" onclick="kbSearch()">检索</button>
     </div>
     <div id="kb-out"></div>
+  </section>
+
+  <!-- 训练 -->
+  <section id="p-train" class="panel">
+    <p class="stat">训练体系：<b>数据蒸馏</b>（强模型生成教学/题解/审查语料）→ <b>知识库训练</b>（TF-IDF 索引+命中率评估）→ <b>定制本地模型</b>（ollama create learn-agent）。日常学习自动沉淀知识库。</p>
+    <div class="row" style="flex-wrap:wrap;">
+      <label class="stat" style="margin:0;">主题数：
+        <input type="number" id="train-topics" value="5" min="1" max="20" style="width:80px;">
+      </label>
+      <label class="stat" style="margin:0; display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="train-skip-distill"> 跳过蒸馏（只重建知识库）
+      </label>
+      <button class="go" onclick="runTrain()">开始训练</button>
+      <button class="go" style="background:#2a3450;" onclick="showTrainReport()">查看上次报告</button>
+    </div>
+    <div id="train-report"></div>
+    <div id="train-jobs"></div>
   </section>
 </main>
 <script>
@@ -106,32 +269,117 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
   b.classList.add('active'); $('#p-' + b.dataset.p).classList.add('active');
 });
-
-async function init() {
-  const st = await (await fetch('/api/status')).json();
-  const train = st.train_report || {};
-  $('#status').textContent =
-    `Ollama: ${st.ollama.join(', ') || '离线'} | 知识库 ${st.kb_docs} 篇` +
-    (train.knowledge ? ` | 命中率 ${(train.knowledge.knowledge_train.hit_rate*100).toFixed(0)}%` : '') +
-    (st.external_enabled ? ' | 外部增强: 开' : ' | 外部增强: 未配置Key');
-  const sel = $('#chat-model');
-  (st.ollama.includes('learn-agent') ? ['learn-agent', ...st.ollama.filter(m => m !== 'learn-agent')] : st.ollama)
-    .forEach(m => sel.add(new Option(m, m)));
-  const ls = $('#learn-lang');
-  Object.keys(st.curriculum).forEach(k => ls.add(new Option(k, k)));
-  const probs = await (await fetch('/api/problems')).json();
-  $('#lc-list').innerHTML = '<table><tr><th>slug</th><th>题目</th><th>难度</th><th></th></tr>' +
-    probs.map(p => `<tr><td>${p.slug}</td><td>${p.title}</td><td>${p.difficulty}</td>
-      <td><button class="go" onclick="solve('${p.slug}')">解题</button></td></tr>`).join('') + '</table>';
-  refreshJobs();
+function goHome() { // 返回首页（对话页）：符合用户"逛完回来"的习惯
+  const home = document.querySelector('nav button[data-p="chat"]');
+  if (home) home.click();
+  window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
+async function init() {
+  // 状态加载失败不得阻断页面初始化（各功能区仍可用）
+  let st = null;
+  try {
+    st = await (await fetch('/api/status')).json();
+  } catch (e) { /* 后端暂不可用时降级 */ }
+  if (st) {
+    const train = st.train_report || {};
+    // 代码版本：显示正在跑的 build；磁盘已改则提示重启（双击启动图标即自动重启）
+    const buildNote = st.build
+      ? (st.build_stale
+          ? ` | <span style="color:var(--warn)" title="磁盘上的代码已更新，当前页面跑的还是旧版">代码已更新（${esc(st.build)}）→ 双击启动图标重启</span>`
+          : ` | build ${esc(st.build)}`)
+      : '';
+    $('#status').innerHTML =
+      `Ollama: ${esc(st.ollama.join(', ') || '离线')} | 知识库 ${st.kb_docs} 篇` +
+      (train.knowledge ? ` | 命中率 ${(train.knowledge.knowledge_train.hit_rate*100).toFixed(0)}%` : '') +
+      (st.external_enabled ? ' | 云端增强: 开' : ' | 云端增强: 未配置') +
+      buildNote;
+    const sel = $('#chat-model');
+    (st.ollama.includes('learn-agent') ? ['learn-agent', ...st.ollama.filter(m => m !== 'learn-agent')] : st.ollama)
+      .forEach(m => sel.add(new Option(m, m)));
+  } else {
+    $('#status').textContent = '后端状态读取失败（功能仍可尝试使用）';
+  }
+  const ls = $('#learn-lang');
+  const BUILTIN_LANGS = ['python', 'javascript', 'java', 'c++', 'go', 'sql', 'html-css'];
+  (st && st.curriculum ? Object.keys(st.curriculum) : BUILTIN_LANGS)
+    .forEach(k => ls.add(new Option(k, k)));
+  loadCourseToc(); // 侧边栏课程目录
+  try {
+    const probs = await (await fetch('/api/problems')).json();
+    $('#lc-list').innerHTML = '<table><tr><th>slug</th><th>题目</th><th>难度</th><th></th></tr>' +
+      probs.map(p => `<tr><td>${p.slug}</td><td>${p.title}</td><td>${p.difficulty}</td>
+        <td><button class="go" onclick="openEditor('${p.slug}')">动手写</button>
+            <button class="go" onclick="explainBySlug('${p.slug}')">讲解</button>
+            <button class="go" onclick="solve('${p.slug}')">AI示范</button></td></tr>`).join('') + '</table>';
+  } catch (e) {
+    $('#lc-list').innerHTML = '<p class="stat">题库加载失败，请稍后刷新页面</p>';
+  }
+  loadExplainToc(); // 侧边栏讲解目录
+  // 代码框 Tab 键缩进（而非跳焦）
+  $('#lc-code').addEventListener('keydown', e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const t = e.target, s = t.selectionStart, en = t.selectionEnd;
+      t.value = t.value.slice(0, s) + '    ' + t.value.slice(en);
+      t.selectionStart = t.selectionEnd = s + 4;
+    }
+  });
+  loadCloud();
+  refreshJobs();
+  showTrainReport(); // 页面加载即显示上次训练报告，不再"自动关闭"
+}
+
+// ====== 云端优先开关 + 模型池 ======
+async function loadCloud() {
+  try {
+    const c = await (await fetch('/api/cloud')).json();
+    const cb = $('#cloud-first');
+    cb.checked = !!c.cloud_first;
+    $('#cloud-toggle').classList.toggle('on', !!c.cloud_first);
+    const strong = c.models.filter(m => m.tier === 'strong').length;
+    const fast = c.models.filter(m => m.tier === 'fast').length;
+    const mut = (c.channels && c.channels.muted) || [];
+    const mutNote = mut.length
+      ? ` · 冷却中: ${mut.map(m => `${(m.label||'').split('(')[0]}约${Math.ceil(m.cooldown_left/60)}分(${m.reason === 'quota' ? '限额节奏,非故障' : '临时故障'})`).join(', ')}`
+      : '';
+    // 依次尝试顺序即调用优先级：首个条目就是当前会先被调用的模型
+    const firstOf = tier => (c.models.find(m => m.tier === tier) || {}).name || '—';
+    const health = (c.channels && c.channels.health) || {};
+    const okN = Object.values(health).filter(h => h.ok > 0).length;
+    $('#cloud-info').innerHTML =
+      `· 云端 ${c.models.length} 模型（${strong} 强档 / ${fast} 快档）` +
+      (c.cloud_first ? ' · 已开启' : '') +
+      `<span title="按历史可用率+新近成功动态排序：先试最可能可用的模型"> · 调用顺序=可用性优先</span>` +
+      ` · 强档首选 <b>${esc(firstOf('strong'))}</b> / 快档首选 <b>${esc(firstOf('fast'))}</b>` +
+      (okN ? ` · 已验证可用 ${okN}` : '') + mutNote;
+  } catch (e) { $('#cloud-info').textContent = '· 云端状态读取失败'; }
+}
+async function toggleCloudFirst() {
+  const v = $('#cloud-first').checked;
+  $('#cloud-toggle').classList.toggle('on', v);
+  await fetch('/api/cloud', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({cloud_first: v})});
+  loadCloud();
+}
+function cfFlag() { return $('#cloud-first') && $('#cloud-first').checked; }
+
 function renderJob(j) {
-  const st = j.status === 'done' ? '<span class="st-done">完成</span>' : '<span class="st-running">运行中…</span>';
+  let st;
+  if (j.status === 'done') {
+    st = '<span class="st-done">完成</span>' + (j.elapsed ? ` <span class="stat">（用时 ${j.elapsed}s）</span>` : '');
+  } else {
+    const el = j.started_at ? Math.round((Date.now()/1000 - j.started_at)) : 0;
+    const p = j.progress ? esc(j.progress) : '运行中…';
+    st = `<span class="st-running">运行中 ${el}s</span><br><span class="stat">${p}</span>`;
+  }
   let body = '';
   if (j.status === 'done') {
     const r = j.result || {};
-    let line = (r.summary || JSON.stringify(r)).slice(0, 1500);
+    let line = (r.summary || JSON.stringify(r));
+    // 学习/实战/训练任务内容长，完整展示；讲解正文已在下方"本地讲解"面板全文显示，任务区只留状态行避免重复；其余截断避免刷屏
+    if (j.kind !== 'learn' && j.kind !== 'capstone' && j.kind !== 'train') line = String(line).slice(0, 1500);
+    if (j.kind === 'explain' || j.kind === 'followup') line = (j.kind === 'explain' ? '讲解已生成，见下方「本地讲解」面板（已保存 data/explain/）' : '追问已回答，已并入下方「本地讲解」面板');
     if (r.local_tests) {
       const t = r.local_tests;
       line += `\n内置测试: <span class="${t.passed ? 'ok' : 'bad'}">${t.passed ? '全部通过' : '存在失败'}</span>`;
@@ -139,18 +387,153 @@ function renderJob(j) {
     }
     body = `<pre class="result">${esc(line)}</pre>`;
   }
-  return `<div class="job"><b>[${esc(j.kind)}]</b> ${esc(j.desc)} @${esc(j.started)} — ${st}${body}</div>`;
+  const head = `<b>[${esc(j.kind)}]</b> ${esc(j.desc)} @${esc(j.started)} — ${st}`;
+  // 学习/实战内容长且易堆积 → 折叠卡片，点击标题展开查看全文
+  if (j.status === 'done' && (j.kind === 'practice' || j.kind === 'smartreview')) {
+    return `<details class="job" id="job-${j.id}"><summary>${head}</summary>`
+      + `<div class="prac-body" data-job="${j.id}"></div></details>`;
+  }
+  if (j.status === 'done' && (j.kind === 'learn' || j.kind === 'capstone')) {
+    return `<details class="job" id="job-${j.id}"><summary>${head}</summary>`
+      + `<div class="tut-body" data-job="${j.id}"></div></details>`;
+  }
+  // 训练卡片：折叠展示，正文是完整训练报告（含蒸馏/知识库/模型三段，绝不裁剪）
+  if (j.status === 'done' && j.kind === 'train') {
+    const rep = (j.result || {}).report || {};
+    const m = rep.model || {};
+    const k = (rep.knowledge || {}).knowledge_train || {};
+    const d = rep.distill || {};
+    const kn = m.knowledge || {};
+    const vm = m.verify_meta || {};
+    let body2 = '';
+    body2 += `<div class="stat">耗时 ${esc(rep.seconds ?? j.elapsed ?? '?')}s`
+           + (rep.started ? ` · 开始 ${esc(rep.started)}` : '')
+           + (rep.finished ? ` · 结束 ${esc(rep.finished)}` : '') + '</div>';
+    if (d && !d.skipped) {
+      body2 += `<div class="stat">① 蒸馏：${d.pairs ?? '?'} 对语料，`
+             + `${d.llm_calls ?? '?'} 次模型调用，平均 ${d.avg_per_call ?? '?'}s/次，`
+             + `用时 ${d.seconds ?? '?'}s</div>`;
+    } else if (d.skipped) {
+      body2 += `<div class="stat">① 蒸馏：已跳过（复用已有数据集）</div>`;
+    } else {
+      body2 += `<div class="stat">① 蒸馏：${esc(JSON.stringify(d))}</div>`;
+    }
+    body2 += `<div class="stat">② 知识库：${k.docs ?? '?'} 篇 / 词表 ${k.vocab ?? '?'} / `
+           + `命中率 ${k.hit_rate != null ? (k.hit_rate * 100).toFixed(0) + '%' : '?'} / `
+           + `蒸馏语料 ${k.distilled_docs ?? '?'} 条</div>`;
+    body2 += `<div class="stat">③ 定制模型：${esc(m.model || '-')}（基座 ${esc(m.base || '-')}）`
+           + ` · system ${m.system_chars ?? '?'} 字`
+           + (kn.total_docs != null
+               ? ` · 常驻知识 ${kn.injected}/${kn.total_docs} 篇（预算 ${kn.budget} 字）`
+               : '')
+           + ` · 用时 ${m.seconds ?? '?'}s</div>`;
+    // 知识库分工说明：常驻精华 + 运行时检索，避免"22/244"被误读成知识库没用
+    if (kn.note) body2 += `<div class="stat">${esc(kn.note)}</div>`;
+    if (kn.kb && kn.kb.by_source) {
+      const srcs = Object.entries(kn.kb.by_source).map(([k2, v]) => `${k2}${v}篇`).join('、');
+      body2 += `<div class="stat">全库 ${kn.kb.total_docs} 篇 / ${kn.kb.total_chars} 字（${esc(srcs)}）</div>`;
+    }
+    const ret = (k.retrieval || {});
+    if (ret.top1_rate != null) {
+      body2 += `<div class="stat">检索自评：排第1 ${(ret.top1_rate * 100).toFixed(0)}%`
+             + ` / 进前3 ${(ret.top3_rate * 100).toFixed(0)}%`
+             + ` / 平均排名 ${ret.avg_rank ?? '?'}</div>`;
+    }
+    if (m.verify) {
+      // 完整验证回答，不截断；thinking 与 content 已在后端分离
+      body2 += `<div class="stat">④ 验证回答（完整 ${vm.content_chars ?? m.verify.length} 字，`
+             + `思考链 ${vm.thinking_chars ?? 0} 字已分离）</div>`
+             + `<pre class="result">${esc(m.verify)}</pre>`;
+    } else if (vm.error) {
+      body2 += `<div class="stat bad">④ 验证失败：${esc(vm.error)}</div>`;
+    }
+    return `<details class="job" id="job-${j.id}"><summary>${head}</summary>${body2}</details>`;
+  }
+  return `<div class="job" id="job-${j.id}">${head}${body}</div>`;
 }
 
+// 增量刷新：不再整体重绘已完成内容 → 阅读/滚动不再被 3 秒轮询打断
 async function refreshJobs() {
-  const jobs = await (await fetch('/api/jobs')).json();
+  let jobs = [];
+  try { jobs = await (await fetch('/api/jobs')).json(); } catch (e) { return; }
+  trackExplJobs(jobs);
   const box = id => $(id);
   const mk = f => jobs.filter(f).map(renderJob).join('') || '<p class="stat">暂无任务</p>';
-  box('#task-jobs').innerHTML = mk(j => j.kind === 'task');
-  box('#lc-jobs').innerHTML = mk(j => j.kind === 'solve');
-  box('#learn-jobs').innerHTML = mk(j => j.kind === 'learn');
+  const renderInto = (sel, f) => {
+    const el = $(sel);
+    if (!el) return;
+    const mine = jobs.filter(f);
+    // 重绘前记住用户展开的折叠卡片，重绘后恢复，3 秒轮询不打断阅读
+    const saved = new Set([...el.querySelectorAll('details[open]')].map(d => d.id));
+    // 学习/实战卡片内含可编辑代码框，轮询重绘会清空用户输入 → 只在内容真变时重绘
+    const fp = mine.map(j => j.id + ':' + j.status + ':' + (j.progress_pct || 0)).join(',');
+    if (el.dataset.fp === fp) return;
+    el.dataset.fp = fp;
+    // 有运行中任务 → 全量重绘（运行中需要状态刷新）
+    if (mine.some(j => j.status === 'running')) {
+      el.innerHTML = mk(f);
+      saved.forEach(id => { const d = document.getElementById(id); if (d) d.open = true; });
+      return;
+    }
+    // 全部完成 → 内容不变时绝不动 DOM，保住滚动位置
+    const frag = mk(f);
+    if (el.innerHTML !== frag) {
+      el.innerHTML = frag;
+      saved.forEach(id => { const d = document.getElementById(id); if (d) d.open = true; });
+    }
+  };
   const busy = jobs.some(j => j.status === 'running');
+  renderInto('#task-jobs', j => j.kind === 'task');
+  renderInto('#lc-jobs', j => j.kind === 'solve' || j.kind === 'explain' || j.kind === 'followup');
+  renderInto('#learn-jobs', j => j.kind === 'learn' || j.kind === 'capstone' || j.kind === 'practice' || j.kind === 'smartreview');
+  renderInto('#train-jobs', j => j.kind === 'train');
+  if (typeof hydrateTutorials === 'function') hydrateTutorials(jobs);
+  if (typeof hydratePractices === 'function') hydratePractices(jobs);
   if (busy) setTimeout(refreshJobs, 3000);
+}
+
+// ====== 训练（蒸馏→知识库→定制模型）=====
+async function runTrain() {
+  const topics = Math.max(1, Math.min(20, parseInt($('#train-topics').value || '5', 10) || 5));
+  const skip_distill = $('#train-skip-distill').checked;
+  await fetch('/api/train', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({topics, skip_distill, cloud_first: cfFlag()})});
+  refreshJobs();
+}
+async function showTrainReport() {
+  const st = await (await fetch('/api/status')).json();
+  const t = st.train_report || {};
+  if (!(t.knowledge || t.distill || t.model)) {
+    $('#train-report').innerHTML = '<p class="stat">暂无训练报告。点「开始训练」生成。</p>';
+    return;
+  }
+  const k = (t.knowledge || {}).knowledge_train || {};
+  const m = t.model || {};
+  const d = t.distill || {};
+  const kn = m.knowledge || {};
+  const vm = m.verify_meta || {};
+  let html = `<div class="job"><b>训练报告</b> <span class="stat">${esc(t.started || '')}`
+    + (t.finished ? ` → ${esc(t.finished)}` : '')
+    + (t.seconds ? ` · 用时 ${t.seconds}s` : '') + '</span>';
+  html += `<div class="stat">① 蒸馏：` +
+    (d.skipped ? '已跳过（复用已有数据集）'
+      : (d.pairs != null ? `${d.pairs} 对语料，${d.llm_calls ?? '?'} 次模型调用，用时 ${d.seconds ?? '?'}s`
+                         : '—')) + '</div>';
+  html += `<div class="stat">② 知识库：${k.docs ?? '?'} 篇 / 词表 ${k.vocab ?? '?'} / 命中率 ` +
+    (k.hit_rate != null ? (k.hit_rate * 100).toFixed(0) + '%' : '?') + '</div>';
+  html += `<div class="stat">③ 定制模型：${esc(m.model || '-')}（基座 ${esc(m.base || '-')}）`
+    + ` · system ${m.system_chars ?? '?'} 字`
+    + (kn.total_docs != null ? ` · 知识注入 ${kn.injected}/${kn.total_docs} 篇` : '') + '</div>';
+  if (m.verify) {
+    html += `<div class="stat">④ 验证回答（完整 ${vm.content_chars ?? m.verify.length} 字，`
+      + `思考链 ${vm.thinking_chars ?? 0} 字已分离）</div>`
+      + `<pre class="result">${esc(m.verify)}</pre>`;
+  } else if (vm.error) {
+    html += `<div class="stat">④ 验证失败：${esc(vm.error)}</div>`;
+  }
+  html += `<details><summary class="stat">查看完整报告 JSON</summary>`
+    + `<pre class="result">${esc(JSON.stringify(t, null, 2))}</pre></details></div>`;
+  $('#train-report').innerHTML = html;
 }
 
 async function runTask() {
@@ -161,17 +544,553 @@ async function runTask() {
 async function runLearn(capstone) {
   const lang = $('#learn-lang').value, topic = $('#learn-topic').value.trim();
   await fetch('/api/learn', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({lang, topic, capstone})});
+    body: JSON.stringify({lang, topic, capstone, cloud_first: cfFlag()})});
   if (!capstone) $('#learn-topic').value = '';
+  refreshJobs();
+  // 生成完成后目录/进度会变，稍后自动刷新一次（任务通常 1-3 分钟，这里轮询等它完成）
+  pollCourseToc();
+}
+// 生成类任务完成后刷新侧边栏目录（已学勾选 + 新教程出现）
+function pollCourseToc(maxMs) {
+  const t0 = Date.now(), limit = maxMs || 8 * 60 * 1000;
+  if (pollCourseToc._t) clearTimeout(pollCourseToc._t);
+  const tick = async () => {
+    await loadCourseToc();
+    if (Date.now() - t0 < limit) pollCourseToc._t = setTimeout(tick, 8000);
+  };
+  pollCourseToc._t = setTimeout(tick, 4000);
+}
+async function runPractice(weak) {
+  const lang = $('#learn-lang').value, topic = $('#learn-topic').value.trim();
+  await fetch('/api/practice', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({lang, topic, weak_only: !!weak, cloud_first: cfFlag()})});
+  $('#learn-topic').value = '';
+  refreshJobs();
+}
+async function runReview() {
+  const lang = $('#learn-lang').value;
+  await fetch('/api/review', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({lang, cloud_first: cfFlag()})});
   refreshJobs();
 }
 async function showPath() {
+  const box = $('#learn-path');
+  if (box.style.display !== 'none' && box.dataset.lang === $('#learn-lang').value) {
+    box.style.display = 'none'; box.dataset.lang = ''; return; // 再点一次收起
+  }
   const lang = $('#learn-lang').value;
+  $('#learn-history').style.display = 'none'; // 与回顾互斥，页面不堆叠
   const r = await (await fetch('/api/path?lang=' + encodeURIComponent(lang))).json();
-  $('#learn-jobs').innerHTML = `<div class="job"><pre class="result">${esc(r.path || r.error)}</pre></div>`;
+  box.innerHTML = `<div class="job"><b>${esc(lang)} 学习路径</b>
+    <span class="stat" style="margin-left:8px;">再次点「路径」可收起</span>
+    <pre class="result" style="max-height:420px;">${esc(r.path || r.error)}</pre></div>`;
+  box.dataset.lang = lang;
+  box.style.display = '';
+}
+
+// ====== 语言学习：侧边栏课程目录 ======
+let _courseToc = null;
+let _pracByTopic = {};   // 主题 -> {count, latest}，课程目录里标练习数
+async function loadCourseToc() {
+  const box = $('#learn-toc-list');
+  if (!box) return;
+  const lang = $('#learn-lang').value;
+  box.innerHTML = '<span class="stat">加载中…</span>';
+  try {
+    // 课程目录与练习汇总一起拉：目录里能直接看到"这课练过几套"
+    const [toc, prac] = await Promise.all([
+      fetch('/api/courses?lang=' + encodeURIComponent(lang)).then(r => r.json()),
+      fetch('/api/practices/by-topic?lang=' + encodeURIComponent(lang))
+        .then(r => r.json()).catch(() => ({ topics: [] })),
+    ]);
+    _courseToc = toc;
+    _pracByTopic = {};
+    (prac.topics || []).forEach(t => { _pracByTopic[t.topic] = t; });
+  } catch (e) {
+    box.innerHTML = '<span class="stat bad">目录加载失败</span>';
+    return;
+  }
+  if (_courseToc.error) {
+    box.innerHTML = '<span class="stat bad">' + esc(_courseToc.error) + '</span>';
+    return;
+  }
+  $('#learn-toc-title').textContent = '📑 ' + (_courseToc.name || lang) + ' 课程目录';
+  renderCourseToc();
+}
+function renderCourseToc() {
+  const d = _courseToc, box = $('#learn-toc-list'), bar = $('#learn-toc-progress');
+  if (!d || !box) return;
+  // 顶部进度条
+  bar.innerHTML = `已学 ${d.done}/${d.total}（${d.pct}%）`
+    + `<div class="bar"><i style="width:${d.pct}%"></i></div>`
+    + (d.next_topic ? `<div style="margin-top:3px;">下一课：<b>${esc(d.next_topic)}</b></div>` : '');
+  const q = ($('#learn-toc-q')?.value || '').trim().toLowerCase();
+  const hit = t => !q || t.toLowerCase().includes(q);
+  let html = '';
+  (d.stages || []).forEach((s, si) => {
+    const items = s.items.filter(i => hit(i.topic));
+    if (!items.length) return;
+    // 阶段默认展开：有未学课程 or 搜索中；全部已学则折叠（节省空间）
+    const open = q ? 'open' : (s.done < s.total ? 'open' : '');
+    html += `<details class="learn-stage" ${open}><summary>${esc(s.stage)}`
+          + `<span class="cnt">${s.done}/${s.total}</span></summary>`;
+    items.forEach(i => {
+      const hasFile = i.has_file;
+      const cls = (i.topic === _courseTopic ? 'active' : '');
+      // 练习标记：这套主题有已保存练习 → 显示 🎯N，点击直接打开练习
+      const prac = _pracByTopic[i.topic];
+      const pracBadge = prac
+        ? `<span class="nf prac-badge" title="${prac.count} 套已保存练习（${esc(prac.latest)}），点这里直接做"`
+          + ` onclick="event.stopPropagation();showTopicPractices('${esc(i.topic.replace(/'/g, "\\'"))}')">🎯${prac.count}</span>`
+        : '';
+      html += `<div class="learn-toc-item ${cls}" data-topic="${esc(i.topic)}" `
+            + `title="${esc(i.topic)}${hasFile ? ' · ' + esc(i.mtime) : ' · 尚未生成教程'}" `
+            + `onclick="openCourseFromToc('${esc(d.lang)}','${esc(i.topic.replace(/'/g, "\\'"))}')">`
+            + `<span class="dot ${i.learned ? '' : 'no'}">${i.learned ? '✓' : '○'}</span>`
+            + `<span class="t">${esc(i.topic)}</span>`
+            + pracBadge
+            + (hasFile ? '' : '<span class="nf">未生成</span>')
+            + `</div>`;
+    });
+    html += '</details>';
+  });
+  if (d.extras && d.extras.length) {
+    html += `<details class="learn-stage"><summary>📄 其他已生成教程`
+          + `<span class="cnt">${d.extras.length}</span></summary>`;
+    d.extras.forEach(e => {
+      html += `<div class="learn-toc-item" title="${esc(e.file)} · ${esc(e.mtime)}" `
+            + `onclick="openExtraCourse('${esc(e.file)}')">`
+            + `<span class="dot">●</span><span class="t">${esc(e.name)}</span></div>`;
+    });
+    html += '</details>';
+  }
+  box.innerHTML = html || '<span class="stat">没有匹配的课程</span>';
+}
+// 点目录里的练习标记：跳到该主题的练习列表并自动展开
+async function showTopicPractices(topic) {
+  $('#learn-path').style.display = 'none';
+  $('#learn-history').style.display = 'none';
+  $('#learn-course-view').style.display = 'none';
+  const box = $('#learn-practices');
+  box.style.display = '';
+  await showPracticeList(true);
+  // 展开第一个匹配该主题的练习
+  const d = await (await fetch('/api/practices?lang=' + encodeURIComponent($('#learn-lang').value))).json();
+  const hit = (d.items || []).find(i => (i.topic || '').includes(topic));
+  if (hit) { await openSavedPractice(hit.file); }
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let _courseTopic = null;
+async function openCourseFromToc(lang, topic) {
+  _courseTopic = topic;
+  renderCourseToc();
+  // 有已生成教程 → 右侧直接展示全文；没有 → 提示并可一键生成
+  const d = _courseToc;
+  let file = '';
+  (d.stages || []).forEach(s => s.items.forEach(i => {
+    if (i.topic === topic && i.has_file) file = i.file;
+  }));
+  const view = $('#learn-course-view');
+  $('#learn-path').style.display = 'none';
+  $('#learn-history').style.display = 'none';
+  view.style.display = '';
+  if (file) {
+    const r = await (await fetch('/api/history?file=' + encodeURIComponent(
+      lang + '/' + file))).json();
+    if (r.error) {
+      view.innerHTML = `<p class="stat bad">${esc(r.error)}</p>`;
+      return;
+    }
+    view.innerHTML = '';
+    const card = document.createElement('div');
+    card.className = 'job';
+    const b = document.createElement('b');
+    b.textContent = lang + ' · ' + topic;
+    card.appendChild(b);
+    card.insertAdjacentHTML('beforeend',
+      `<div class="row" style="margin:6px 0;"><button class="go" style="background:#2a3450;`
+      + `padding:4px 10px;font-size:12px;" onclick="runLearnTopic('${esc(lang)}',`
+      + `'${esc(topic.replace(/'/g, "\\'"))}')">重新生成这一课</button></div>`);
+    tutorialHtml(card, r.content, 'python');
+    view.appendChild(card);
+    view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    view.innerHTML = `<div class="job"><b>${esc(lang)} · ${esc(topic)}</b>
+      <p class="stat">这课还没有生成教程。点下面按钮生成（约 1–3 分钟），生成后会自动出现在目录里。</p>
+      <button class="go" onclick="runLearnTopic('${esc(lang)}','${esc(topic.replace(/'/g, "\\'"))}')">
+        生成这一课</button></div>`;
+    view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+async function runLearnTopic(lang, topic) {
+  $('#learn-topic').value = topic;
+  await runLearn(false);
+}
+// 打开「其他已生成教程」（不在大纲里，如 custom/ 目录）：右侧主区渲染
+async function openExtraCourse(file) {
+  const lang = $('#learn-lang').value;
+  const view = $('#learn-course-view');
+  $('#learn-path').style.display = 'none';
+  $('#learn-history').style.display = 'none';
+  view.style.display = '';
+  view.innerHTML = '<span class="stat">加载中…</span>';
+  const r = await (await fetch('/api/history?file=' + encodeURIComponent(lang + '/' + file))).json();
+  if (r.error) { view.innerHTML = `<p class="stat bad">${esc(r.error)}</p>`; return; }
+  view.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'job';
+  const b = document.createElement('b');
+  b.textContent = lang + ' · ' + file;
+  card.appendChild(b);
+  tutorialHtml(card, r.content, 'python');
+  view.appendChild(card);
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ====== 历史练习：查看已生成的练习（重启后也能看）======
+// 练习生成后只存在内存 JOBS 里，服务重启就查不到了 —— 磁盘 data/practice/*.json
+// 却一直保留。这里提供入口按磁盘列出并可直接作答判题。
+async function showPracticeList(force) {
+  const box = $('#learn-practices');
+  if (!box) return;
+  if (box.style.display !== 'none' && !force) {   // 再点一次收起
+    box.style.display = 'none';
+    return;
+  }
+  $('#learn-path').style.display = 'none';
+  $('#learn-history').style.display = 'none';
+  $('#learn-course-view').style.display = 'none';
+  box.style.display = '';
+  box.innerHTML = '<span class="stat">加载练习列表…</span>';
+  const lang = $('#learn-lang').value;
+  let d;
+  try {
+    d = await (await fetch('/api/practices?lang=' + encodeURIComponent(lang))).json();
+  } catch (e) {
+    box.innerHTML = '<p class="stat bad">练习列表加载失败</p>';
+    return;
+  }
+  if (d.error) { box.innerHTML = `<p class="stat bad">${esc(d.error)}</p>`; return; }
+  if (!d.items || !d.items.length) {
+    box.innerHTML = `<div class="job"><b>📋 历史练习</b>
+      <p class="stat">${esc(lang)} 还没有已保存的练习。点上方「🎯 练习」生成一套（会存档到 data/practice/，以后随时能回来做）。</p></div>`;
+    return;
+  }
+  // 按主题分组（同一主题可能练过多次）
+  const groups = {};
+  d.items.forEach(i => { (groups[i.topic || '（未命名）'] = groups[i.topic || '（未命名）'] || []).push(i); });
+  let html = `<div class="job"><b>📋 历史练习</b> <span class="stat">共 ${d.total} 套（点「开始做题」展开，可直接改代码点▶运行判题）</span>`;
+  Object.keys(groups).forEach(topic => {
+    html += `<div class="prac-group"><div class="prac-group-head">${esc(topic)}`
+          + `<span class="stat"> · ${groups[topic].length} 套</span></div>`;
+    groups[topic].forEach(i => {
+      html += `<div class="prac-row">
+        <span class="stat">${esc(i.mtime)}</span>
+        <span class="stat">${i.count} 题${i.weak_used ? ' · 薄弱点强化' : ''}</span>
+        <button class="go" style="padding:4px 10px;font-size:12px;"
+          onclick="openSavedPractice('${esc(i.file)}')">开始做题</button>
+        <span class="stat">${esc((i.titles || []).join(' / ')).slice(0, 90)}</span>
+      </div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div><div id="prac-view"></div>';
+  box.innerHTML = html;
+}
+
+async function openSavedPractice(file) {
+  const view = $('#prac-view');
+  if (!view) return;
+  view.innerHTML = '<span class="stat">加载练习…</span>';
+  let d;
+  try {
+    d = await (await fetch('/api/practices?file=' + encodeURIComponent(file))).json();
+  } catch (e) {
+    view.innerHTML = '<p class="stat bad">加载失败</p>';
+    return;
+  }
+  if (d.error) { view.innerHTML = `<p class="stat bad">${esc(d.error)}</p>`; return; }
+  view.innerHTML = '';
+  const card = document.createElement('div');
+  card.className = 'job';
+  const head = document.createElement('b');
+  head.textContent = '🎯 ' + (d.topic || '') + '（' + (d.items || []).length + ' 题）';
+  card.appendChild(head);
+  const note = document.createElement('p');
+  note.className = 'stat';
+  note.textContent = '改代码后点「▶ 运行判题」，全部通过后会自动记入进度。存档：data/practice/' + file;
+  card.appendChild(note);
+  view.appendChild(card);
+  // 复用 labs.js 的练习渲染（buildPracticeSet 需要 job 结构，这里构造一个假 job）
+  const fakeJob = { id: 'saved-' + file.replace(/[^\w]/g, '_'), kind: 'practice',
+                    status: 'done', result: { summary: JSON.stringify(d) } };
+  buildPracticeSet(card, fakeJob, d);
+  view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ====== 回顾已学内容 ======
+async function showHistory(lang) {
+  const box = $('#learn-history');
+  if (box.style.display !== 'none') { box.style.display = 'none'; return; } // 再点一次收起
+  $('#learn-path').style.display = 'none'; // 与路径互斥，页面不堆叠
+  box.style.display = '';
+  const langF = lang || ($('#learn-lang') ? $('#learn-lang').value : '');
+  const q = langF ? '?lang=' + encodeURIComponent(langF) : '';
+  const r = await (await fetch('/api/history' + q)).json();
+  if (r.error) { box.innerHTML = `<p class="stat bad">${esc(r.error)}</p>`; return; }
+  if (!r.items.length) {
+    box.innerHTML = `<p class="stat">还没有已学教程。先点「学习」生成第一课，内容会自动存档（data/languages/），以后随时可回顾。</p>`;
+    return;
+  }
+  box.innerHTML = '<p class="stat">已学教程（点击标题查看全文，可按语言筛选）：</p>' +
+    `<select id="hist-lang" style="max-width:160px; margin-bottom:8px;" onchange="showHistory(this.value)">
+       <option value="">全部语言</option>
+       ${[...new Set(r.items.map(i => i.lang))].map(l =>
+         `<option value="${esc(l)}" ${l === langF ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+     </select>` +
+    '<table><tr><th>语言</th><th>阶段</th><th>主题</th><th>生成时间</th><th></th></tr>' +
+    r.items.map(i => `<tr><td>${esc(i.lang)}</td><td>${esc(i.stage)}</td><td>${esc(i.name)}</td>
+      <td>${esc(i.mtime)}</td>
+      <td><button class="go" onclick="viewHistory('${esc(i.file)}')">查看</button></td></tr>`).join('') + '</table>' +
+    `<div id="hist-view" style="margin-top:10px;"></div>`;
+}
+async function viewHistory(file) {
+  const box = $('#hist-view');
+  if (!box) return;
+  const r = await (await fetch('/api/history?file=' + encodeURIComponent(file))).json();
+  if (r.error) { box.innerHTML = `<p class="stat bad">${esc(r.error)}</p>`; return; }
+  box.innerHTML = "";
+  var head = document.createElement("div");
+  head.className = "job";
+  var title = document.createElement("b");
+  title.textContent = r.path;
+  head.appendChild(title);
+  tutorialHtml(head, r.content, "python");
+  box.appendChild(head);
 }
 async function solve(slug) {
-  await fetch('/api/solve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({slug})});
+  await fetch('/api/solve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({slug, cloud_first: cfFlag()})});
+  refreshJobs();
+}
+
+// ====== 力扣：动手写 / 判题 / 讲解 ======
+let _lcSlug = null;
+let _explJobs = new Map(); // 讲解/追问任务状态跟踪：完成时自动重载本地讲解面板
+function trackExplJobs(jobs) {
+  jobs.filter(j => j.kind === 'explain' || j.kind === 'followup').forEach(j => {
+    if (_explJobs.get(j.id) === 'running' && j.status === 'done') loadExplain(_lcSlug);
+    _explJobs.set(j.id, j.status);
+  });
+}
+function closeEditor() {
+  $('#lc-editor').style.display = 'none';
+  $('#lc-list').style.display = '';
+  _lcSlug = null;
+  renderExplainToc();
+  $('#lc-editor').scrollIntoView({ behavior: 'auto', block: 'start' });
+}
+async function loadExplainToc() {
+  const box = $('#lc-toc-list');
+  if (!box) return;
+  let items = [];
+  try {
+    const r = await (await fetch('/api/explains')).json();
+    items = r.items || [];
+  } catch (e) {
+    box.innerHTML = '<span class="stat bad">目录加载失败</span>';
+    return;
+  }
+  _tocItems = items;
+  renderExplainToc();
+}
+let _tocItems = [];
+function renderExplainToc() {
+  const box = $('#lc-toc-list');
+  if (!box) return;
+  const q = ($('#lc-toc-q')?.value || '').trim().toLowerCase();
+  const list = _tocItems.filter(i =>
+    !q || i.slug.toLowerCase().includes(q) || (i.title || '').toLowerCase().includes(q));
+  if (!list.length) {
+    box.innerHTML = '<span class="stat">没有匹配的题目</span>';
+    return;
+  }
+  const byDiff = {};
+  list.forEach(i => { (byDiff[i.difficulty] = byDiff[i.difficulty] || []).push(i); });
+  const order = ['简单', '中等', '困难', '?'];
+  const keys = order.filter(k => byDiff[k]).concat(
+    Object.keys(byDiff).filter(k => !order.includes(k)));
+  let html = '';
+  keys.forEach(k => {
+    html += `<div class="lc-toc-group">${esc(k)} (${byDiff[k].length})</div>`;
+    byDiff[k].forEach(i => {
+      const has = i.has_explain;
+      html += `<div class="lc-toc-item ${i.slug === _lcSlug ? 'active' : ''}"
+        data-slug="${esc(i.slug)}" title="${esc(i.title)}${has ? ' · ' + esc(i.mtime) : ' · 暂无讲解'}"
+        onclick="openExplainFromToc('${esc(i.slug)}')">
+        <span class="dot ${has ? '' : 'no'}">${has ? '●' : '○'}</span>
+        <span class="t">${esc(i.title)}</span></div>`;
+    });
+  });
+  box.innerHTML = html;
+}
+function filterExplainToc() { renderExplainToc(); }
+// 点目录：直接打开该题并显示本地讲解（不再重复生成），无讲解则提示生成
+async function openExplainFromToc(slug) {
+  if (!slug) return;
+  _lcSlug = slug;
+  await openEditor(slug);
+  await loadExplain(slug);
+  const r = await (await fetch('/api/explain/' + encodeURIComponent(slug))).json();
+  $('#lc-explain').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (r.content) {
+    $('#lc-judge-status').innerHTML =
+      '<span class="stat">已显示本地讲解（' + r.content.length + ' 字）'
+      + '<button class="go" style="background:#2a3450;padding:3px 10px;margin-left:6px;" '
+      + 'onclick="regenerateExplain()">重新生成</button></span>';
+  } else {
+    $('#lc-judge-status').innerHTML =
+      '<span class="stat">这题还没生成讲解</span>'
+      + '<button class="go" style="padding:3px 10px;margin-left:6px;" '
+      + 'onclick="explainBySlug(null)">生成讲解</button>';
+  }
+  renderExplainToc();
+}
+async function openEditor(slug) {
+  _lcSlug = slug;
+  const r = await (await fetch('/api/problem?slug=' + encodeURIComponent(slug))).json();
+  if (r.error) { alert(r.error); return; }
+  $('#lc-editor').style.display = '';
+  $('#lc-title').textContent = r.title + '  (' + r.slug + ')';
+  $('#lc-diff').textContent = r.difficulty;
+  // 模型档位提示：讲解/AI示范按难度自动选档；括号内为该档位当前实际调用顺序（可用性优先）
+  try {
+    const c = await (await fetch('/api/cloud')).json();
+    const top = (tier, n) => c.models.filter(m => m.tier === tier).slice(0, n)
+      .map(m => m.name.split('(')[0]).join(' → ');
+    $('#lc-modelbar').innerHTML =
+      `难度自动选档 — <b>难题/讲解</b>→强档(${top('strong', 3)})；` +
+      `<b>简单题/聊天</b>→快档(${top('fast', 3)})` +
+      `<br><span class="stat">顺序＝按历史可用率+新近成功动态排序，排前面的先试</span>` +
+      (c.cloud_first ? ' · <b>云端优先已开</b>' : ' · 本地优先');
+  } catch (e) { $('#lc-modelbar').textContent = ''; }
+  $('#lc-desc').textContent = (r.desc || '') +
+    (r.signature ? '\n\n函数签名（请严格遵守）：\n' + r.signature : '');
+  $('#lc-code').value = (r.signature || '') + '\n';
+  $('#lc-result').innerHTML = '';
+  $('#lc-judge-status').textContent = '';
+  // 收起题目列表，让编辑器独占视野（返回列表可用「返回」按钮）
+  $('#lc-list').style.display = 'none';
+  $('#lc-editor').scrollIntoView({ behavior: 'auto', block: 'start' });
+  loadExplain(slug); // 打开题目即显示本地已保存讲解
+  renderExplainToc(); // 侧边栏高亮当前题
+  $('#lc-code').focus();
+}
+async function judgeCode() {
+  if (!_lcSlug) { alert('请先点「动手写」选一道题'); return; }
+  const code = $('#lc-code').value;
+  if (!code.trim()) { alert('代码为空'); return; }
+  $('#lc-judge-status').innerHTML = '<span class="st-running">判题中…</span>';
+  $('#lc-result').innerHTML = '';
+  try {
+    const r = await (await fetch('/api/judge', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({slug: _lcSlug, code})})).json();
+    if (r.error) { $('#lc-judge-status').innerHTML = '<span class="bad">错误: ' + esc(r.error) + '</span>'; return; }
+    renderJudge(r);
+  } catch (e) {
+    $('#lc-judge-status').innerHTML = '<span class="bad">请求失败: ' + esc(String(e)) + '</span>';
+  }
+}
+function renderJudge(r) {
+  let html = '';
+  if (r.static) {
+    html += '<div class="job"><b class="bad">语法/静态检查未通过</b><pre class="result">' + esc(r.static) + '</pre></div>';
+  }
+  if (r.tests && r.tests.length) {
+    html += '<table><tr><th>#</th><th>输入</th><th>期望</th><th>实际</th><th>结果</th></tr>';
+    r.tests.forEach((t, i) => {
+      html += '<tr><td>' + (i+1) + '</td><td>' + esc(t.args) + '</td><td>' +
+        esc(JSON.stringify(t.expected)) + '</td><td>' + esc(JSON.stringify(t.got)) +
+        '</td><td class="' + (t.ok ? 'ok' : 'bad') + '">' + (t.ok ? '✓ 通过' : '✗ 失败') + '</td></tr>';
+    });
+    html += '</table>';
+  }
+  if (r.leak && r.leak.detail) {
+    html += '<div class="stat">内存检测: ' + esc(r.leak.detail) + '</div>';
+  }
+  $('#lc-result').innerHTML = html || '<p class="stat">无测试结果</p>';
+  $('#lc-judge-status').innerHTML = r.passed
+    ? '<span class="st-done">✓ 全部通过</span>'
+    : '<span class="bad">存在失败，请对照上表修正</span>';
+}
+async function explainBySlug(slug) {
+  const target = slug || _lcSlug;
+  if (!target) { alert('请先点「动手写」或列表「讲解」选一道题'); return; }
+  if (slug) { _lcSlug = slug; await openEditor(slug); }
+  // 已有本地讲解直接展示，不重复烧 token 等 30~90s；只有明确要求才重新生成
+  const cur = await (await fetch('/api/explain/' + encodeURIComponent(target))).json();
+  if (cur.content && !_forceExplain) {
+    await loadExplain(target);
+    $('#lc-judge-status').innerHTML =
+      '<span class="stat">已显示本地讲解（' + cur.content.length + ' 字）。'
+      + '<button class="go" style="background:#2a3450;padding:3px 10px;margin-left:6px;" '
+      + 'onclick="regenerateExplain()">重新生成</button></span>';
+    $('#lc-explain').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  _forceExplain = false;
+  await fetch('/api/explain', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({slug: target, cloud_first: cfFlag()})});
+  $('#lc-judge-status').innerHTML = '<span class="st-running">讲解生成中…（约 30–90s，完成后自动显示在下方本地讲解）</span>';
+  refreshJobs();
+}
+let _forceExplain = false;
+function regenerateExplain() {
+  if (!_lcSlug) return;
+  _forceExplain = true;
+  explainBySlug(_lcSlug);
+}
+async function loadExplain(slug) {
+  if (!slug) return;
+  const r = await (await fetch('/api/explain/' + encodeURIComponent(slug))).json();
+  const c = $('#lc-explain-content'), s = $('#lc-explain-state');
+  if (!c) return;
+  if (r.content) {
+    // 用 tutorialHtml 渲染 Markdown：标题/列表/加粗正常显示，
+    // ``` 代码围栏变成可编辑可运行的练习框（与「语言学习」教程同一套渲染）。
+    // 以前这里用 <pre> + esc() 直接输出，用户看到的是满屏 # 和 ** 原文，
+    // 误以为"讲解没显示出来"。
+    c.innerHTML = '';
+    renderExplain(c, r.content);
+    if (s) s.textContent = '已保存在本地 data/explain/' + slug
+      + '.md（' + r.content.length + ' 字），可随时回看/追问';
+  } else {
+    c.innerHTML = '<p class="stat">这题还没有讲解，点上方「看讲解」生成（生成后自动保存本地）</p>';
+    if (s) s.textContent = '';
+  }
+}
+
+function renderExplain(box, content) {
+  // tutorialHtml 在 labs.js 里（页面底部加载），可能尚未就绪 → 等待
+  if (typeof tutorialHtml === 'function') {
+    tutorialHtml(box, content, 'python');
+  } else {
+    const pre = document.createElement('pre');
+    pre.className = 'result';
+    pre.style.whiteSpace = 'pre-wrap';
+    pre.textContent = content;
+    box.appendChild(pre);
+  }
+}
+
+async function askFollowup() {
+  if (!_lcSlug) { alert('请先选择一道题'); return; }
+  const q = $('#lc-followup').value.trim();
+  if (!q) { alert('请输入追问内容'); return; }
+  $('#lc-followup').value = '';
+  await fetch('/api/explain/followup', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({slug: _lcSlug, question: q, cloud_first: cfFlag()})});
+  $('#lc-explain-state').textContent = '追问已提交（见任务区），完成后自动并入本地讲解…';
   refreshJobs();
 }
 
@@ -192,12 +1111,28 @@ $('#chat-in').addEventListener('keydown', e => { if (e.key === 'Enter') sendChat
 async function kbSearch() {
   const q = $('#kb-q').value.trim(); if (!q) return;
   const hits = await (await fetch('/api/kb?q=' + encodeURIComponent(q))).json();
-  $('#kb-out').innerHTML = hits.length ? hits.map(h =>
-    `<div class="job"><b>${esc(h.title)}</b> <span class="stat">[${h.lang}] score=${h.score} src=${esc(h.source)}</span><br>${esc(h.excerpt)}…</div>`
+  $('#kb-out').innerHTML = hits.length ? hits.map((h, i) =>
+    `<div class="job"><b>${esc(h.title)}</b> <span class="stat">[${h.lang}] score=${h.score} src=${esc(h.source)}</span><br>${esc(h.excerpt)}…<br>
+     <button class="go" style="background:#2a3450; margin-top:6px;" onclick="kbFull(${i})">查看全文</button>
+     <div id="kb-full-${i}" style="margin-top:6px;"></div></div>`
   ).join('') : '<p class="stat">没有命中，先去"语言学习"里学一点东西吧</p>';
+}
+async function kbFull(i) {
+  const q = $('#kb-q').value.trim();
+  const box = $('#kb-full-' + i);
+  if (!box) return;
+  if (box.dataset.loaded) { box.style.display = box.style.display === 'none' ? '' : 'none'; return; }
+  box.innerHTML = '<span class="st-running">加载全文…</span>';
+  const hits = await (await fetch('/api/kb?q=' + encodeURIComponent(q) + '&full=1')).json();
+  const h = hits[i];
+  box.dataset.loaded = '1';
+  box.innerHTML = h && h.text
+    ? `<pre class="result" style="max-height:480px;">${esc(h.text)}</pre>`
+    : '<p class="stat bad">未取到全文</p>';
 }
 
 init();
 </script>
+<script src="/static/labs.js"></script>
 </body>
 </html>

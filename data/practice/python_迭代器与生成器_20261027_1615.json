@@ -1,0 +1,44 @@
+{
+  "lang": "python",
+  "topic": "迭代器与生成器",
+  "items": [
+    {
+      "title": "用生成器函数逐个产出列表中的偶数",
+      "task": "编写生成器函数 even_iter(nums)，接收一个整数列表，用 yield 依次产出其中的偶数。调用它并遍历打印每个偶数。示例：输入 [1,2,3,4,5,6]，输出依次为 2、4、6。",
+      "starter": "def even_iter(nums):\n    # TODO: 遍历 nums，遇到偶数时用 yield 产出\n    pass\n\nnums = [1, 2, 3, 4, 5, 6]\nfor x in even_iter(nums):\n    print(x)\n",
+      "expects": [
+        "2",
+        "4"
+      ]
+    },
+    {
+      "title": "自定义可迭代类：用 __iter__ 返回迭代器",
+      "task": "定义一个类 CountDown，初始化参数 n，表示从 n 倒数到 1。为它实现 __iter__ 方法，返回一个迭代器（可用生成器实现），使 for 循环能依次打印 n, n-1, ..., 1。示例：CountDown(3) 输出 3、2、1。",
+      "starter": "class CountDown:\n    def __init__(self, n):\n        self.n = n\n\n    def __iter__(self):\n        # TODO: 返回一个生成器，依次产出 self.n 到 1\n        pass\n\ncd = CountDown(3)\nfor x in cd:\n    print(x)\n",
+      "expects": [
+        "3",
+        "2"
+      ]
+    },
+    {
+      "title": "用生成器表达式与 next 手动取前几个值",
+      "task": "给定列表 words，用生成器表达式创建一个产出每个单词长度的生成器 gen。然后用 next() 手动取出前 3 个长度并打印，最后打印剩余个数（用 sum(1 for _ in gen) 统计）。示例：words = ['a','bb','ccc','dddd']，前三个长度为 1、2、3，剩余 1 个。",
+      "starter": "words = ['a', 'bb', 'ccc', 'dddd']\ngen = (len(w) for w in words)\n\n# TODO: 用 next(gen) 取出前 3 个长度并打印\n\n# TODO: 统计并打印剩余元素个数\n",
+      "expects": [
+        "1",
+        "剩余 1"
+      ]
+    },
+    {
+      "title": "生成器管道：筛选并转换数据流",
+      "task": "编写两个生成器函数：filter_pos(nums) 只产出正数；double(nums) 把每个数翻倍。将列表 data 依次经过这两个生成器，最后用 for 打印结果，并打印结果总个数。示例：data = [-2, 3, 0, 5, -1, 4]，输出 6、10、8，总个数 3。",
+      "starter": "def filter_pos(nums):\n    # TODO: 只 yield 大于 0 的数\n    pass\n\ndef double(nums):\n    # TODO: 对每个数 yield 它的 2 倍\n    pass\n\ndata = [-2, 3, 0, 5, -1, 4]\nresult = double(filter_pos(data))\ncount = 0\nfor x in result:\n    print(x)\n    count += 1\nprint('总个数', count)\n",
+      "expects": [
+        "6",
+        "总个数 3"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_迭代器与生成器_20261027_1615.json",
+  "weak_used": false
+}

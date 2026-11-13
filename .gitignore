@@ -5,10 +5,15 @@ __pycache__/
 .venv/
 venv/
 
-# 运行期产物（任务输出不入库，可随时重新生成）
+# 运行期产物
 data/outputs/
-webapp/serve.log
+data/runtime/
+data/logs/
 *.log
+
+# 本机状态（通道画像/实例登记/探测结果，不入库）
+data/memory/llm_channels.json
+data/gateway_probe.json
 
 # 模型与大文件
 models/
@@ -17,16 +22,21 @@ models/
 
 # 打包产物
 build/
+dist/
 *.exe
+*.spec
 smoke_ok.txt
 smoke_stage.txt
 
-# 训练证据（保留）：data/knowledge/index.json、data/datasets/*.jsonl、data/train_report.json
-
-# 本地配置（含数据库密码/API Key，不入库；模板见 config.example.yaml）
+# 本地配置（含数据库密码/API Key；模板见 config.example.yaml）
 config.yaml
 .env
 
 # IDE
 .idea/
 .vscode/
+
+# 沙箱临时目录
+.tmp/
+_tmpprobe/
+.dshextract/

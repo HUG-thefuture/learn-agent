@@ -1,9 +1,15 @@
 {
   "knowledge_train": {
-    "docs": 46,
-    "vocab": 3199,
-    "distilled_docs": 40,
-    "hit_rate": 1.0,
-    "index": "D:\\learn-agent\\data\\knowledge\\index.json"
+    "docs": 491,
+    "vocab": 29029,
+    "distilled_docs": 248,
+    "hit_rate": 0.971,
+    "retrieval": {
+      "top1_rate": 0.935,
+      "top3_rate": 0.975,
+      "avg_rank": 0.21,
+      "n": 200
+    },
+    "index": "learn-agent\\data\\knowledge\\index.json"
   }
 }

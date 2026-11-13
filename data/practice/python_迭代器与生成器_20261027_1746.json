@@ -1,0 +1,43 @@
+{
+  "lang": "python",
+  "topic": "迭代器与生成器",
+  "items": [
+    {
+      "title": "用生成器函数按需产出平方数",
+      "task": "编写生成器函数 squares(n)，依次产出 1 到 n 的平方数。调用它并转成列表打印，同时打印前 3 个平方数。示例输入 n=5，输出列表 [1, 4, 9, 16, 25]，前三个为 [1, 4, 9]。",
+      "starter": "def squares(n):\n    # TODO: 使用 for 循环和 yield，依次产出 1 到 n 的平方\n    pass\n\nn = 5\nresult = list(squares(n))\nprint(\"平方列表:\", result)\n\n# TODO: 创建生成器对象，用 next() 取前 3 个平方数并放入 first_three\nfirst_three = []\ngen = squares(n)\nfor _ in range(3):\n    first_three.append(next(gen))\nprint(\"前三个平方数:\", first_three)\n",
+      "expects": [
+        "平方列表: [1, 4, 9, 16, 25]",
+        "前三个平方数: [1, 4, 9]"
+      ]
+    },
+    {
+      "title": "自定义迭代器类：倒计时",
+      "task": "定义一个 Countdown 类，初始化时接收一个正整数 start。该类实现迭代器协议：__iter__ 返回自身，__next__ 每次返回当前值并减 1，减到 0 时抛出 StopIteration。用 for 循环遍历 Countdown(5)，把结果收集到列表并打印。示例输入 start=5，输出 [5, 4, 3, 2, 1]。",
+      "starter": "class Countdown:\n    def __init__(self, start):\n        self.current = start\n\n    def __iter__(self):\n        # TODO: 返回迭代器自身\n        pass\n\n    def __next__(self):\n        # TODO: 如果 current <= 0 抛出 StopIteration；否则返回 current 并让 current 减 1\n        pass\n\ncd = Countdown(5)\nresult = []\nfor x in cd:\n    result.append(x)\nprint(\"倒计时:\", result)\n",
+      "expects": [
+        "倒计时: [5, 4, 3, 2, 1]"
+      ]
+    },
+    {
+      "title": "生成器表达式筛选与求和",
+      "task": "给定一个整数列表 nums，使用生成器表达式筛选出其中的偶数，并分别打印偶数列表和它们的和。示例输入 nums=[1,2,3,4,5,6,7,8,9,10]，输出偶数列表 [2, 4, 6, 8, 10]，和为 30。",
+      "starter": "nums = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]\n\n# TODO: 用生成器表达式筛选偶数，赋值给 evens_gen\nevens_gen = (x for x in nums if x % 2 == 0)\n\nevens = list(evens_gen)\nprint(\"偶数列表:\", evens)\n\n# TODO: 用生成器表达式求偶数的和，赋值给 total\ntotal = sum(x for x in nums if x % 2 == 0)\nprint(\"偶数和:\", total)\n",
+      "expects": [
+        "偶数列表: [2, 4, 6, 8, 10]",
+        "偶数和: 30"
+      ]
+    },
+    {
+      "title": "生成器管道：读取文件行并统计长度",
+      "task": "编写生成器函数 read_lines(path)，逐行读取文件并 yield 去掉换行符后的字符串。再用另一个生成器函数 line_lengths(lines)，对每一行 yield 其长度。用给定的示例文件内容写入临时文件，然后通过管道打印每行长度和总行数。示例文件内容为三行：'apple'、'banana'、'cherry'，输出长度 [5, 6, 6]，总行数 3。",
+      "starter": "def read_lines(path):\n    # TODO: 用 with open(path, 'r', encoding='utf-8') 打开文件，逐行读取并 yield 去掉末尾换行符的行\n    pass\n\ndef line_lengths(lines):\n    # TODO: 遍历 lines，对每一行 yield len(line)\n    pass\n\npath = \"sample.txt\"\nwith open(path, \"w\", encoding=\"utf-8\") as f:\n    f.write(\"apple\\nbanana\\ncherry\\n\")\n\nlengths = list(line_lengths(read_lines(path)))\nprint(\"每行长度:\", lengths)\nprint(\"总行数:\", len(lengths))\n",
+      "expects": [
+        "每行长度: [5, 6, 6]",
+        "总行数: 3"
+      ]
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_迭代器与生成器_20261027_1746.json",
+  "weak_used": false
+}

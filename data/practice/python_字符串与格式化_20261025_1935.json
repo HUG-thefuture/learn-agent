@@ -1,0 +1,32 @@
+{
+  "lang": "python",
+  "topic": "字符串与格式化",
+  "items": [
+    {
+      "title": "统计单词并格式化输出",
+      "task": "读入一行英文句子（单词之间用空格分隔），统计单词个数与最长单词，并按指定格式输出。示例输入：hello python world；示例输出：单词数: 3 | 最长单词: python",
+      "starter": "s = input(\"请输入英文句子: \")\n# TODO: 用 split 得到单词列表，统计个数，找出最长单词\n\n# TODO: 按格式输出：单词数: X | 最长单词: Y\n",
+      "expects": "单词数: 3 | 最长单词: python"
+    },
+    {
+      "title": "姓名格式化与首字母缩写",
+      "task": "读入一个姓名（名和姓用空格分隔），输出“姓, 名”的格式，并输出姓名首字母缩写（大写）。示例输入：john smith；示例输出：smith, john 和 J.S.",
+      "starter": "name = input(\"请输入姓名: \")\n# TODO: 拆分姓名，构造 \"姓, 名\" 格式\n\n# TODO: 构造首字母缩写，如 J.S.\n\n# TODO: 打印两行结果\n",
+      "expects": "smith, john\nJ.S."
+    },
+    {
+      "title": "对齐输出商品价格表",
+      "task": "给定商品名和价格列表，使用字符串格式化输出对齐的价格表，每行格式为“商品名 价格”，商品名左对齐占10个字符，价格保留2位小数右对齐占8个字符。示例输出：apple        3.50",
+      "starter": "items = [(\"apple\", 3.5), (\"banana\", 1.2), (\"cherry\", 12.0)]\n# TODO: 遍历 items，用格式化输出每行：商品名左对齐10位，价格右对齐8位保留2位小数\n\n",
+      "expects": "apple        3.50\nbanana       1.20"
+    },
+    {
+      "title": "模板字符串替换生成报告",
+      "task": "给定一个包含占位符的模板字符串和字典数据，使用字符串的 format 方法替换占位符，生成报告并输出。示例输入：模板 \"{name} 的分数是 {score}\"，数据 {\"name\": \"Tom\", \"score\": 95}；示例输出：Tom 的分数是 95",
+      "starter": "template = \"{name} 的分数是 {score}\"\ndata = {\"name\": \"Tom\", \"score\": 95}\n# TODO: 使用 template.format(**data) 生成结果\n\n# TODO: 打印结果\n",
+      "expects": "Tom 的分数是 95"
+    }
+  ],
+  "path": "learn-agent\\data\\practice\\python_字符串与格式化_20261025_1935.json",
+  "weak_used": false
+}
